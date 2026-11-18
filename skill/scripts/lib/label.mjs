@@ -8,8 +8,10 @@ import { createHash } from "node:crypto";
 import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { newLog, applyEvents, kebab } from "./log.mjs";
+import { norm, wordsOf, akin } from "./check.mjs";
+import { prose } from "./chunk.mjs";
 
-export const PROMPT_VERSION = 8;
+export const PROMPT_VERSION = 9;
 
 const SYSTEM = `You read a document on behalf of one specific reader, one chunk at a time, in order. You record what each chunk does to that reader's knowledge. Your records become a log that is checked by a program, so follow the definitions below exactly.
 
@@ -117,8 +119,19 @@ export function describeLog(log) {
   return lines.join("\n");
 }
 
+/**
+ * The known terms that this chunk actually contains. Only these go in the
+ * prompt, so adding a term to the list changes the prompt (and so the cached
+ * answer) from the first chunk that has the term, and not from chunk 1.
+ */
+export function knownHere(knows, text) {
+  const have = wordsOf(text.replace(/[.,;:!?)]+(\s|$)/g, " "));
+  return knows.filter((t) => wordsOf(t).every((w) => have.some((h) => akin(h, w))));
+}
+
 function userPrompt(reader, log, before, c) {
-  const knows = log.knows.length ? `\nThey already know these, so never list them as concepts: ${log.knows.join(", ")}.` : "";
+  const here = knownHere(log.knows, c.text);
+  const knows = here.length ? `\nThey already know these, so never list them as concepts: ${here.join(", ")}.` : "";
   return [
     `<reader>\n${reader}${knows}\n</reader>`,
     `<log>\n${describeLog(log)}\n</log>`,
@@ -165,13 +178,52 @@ const callClaude = async (prompt, model) => {
 };
 
 /**
+ * Run `fn` (which returns { output, cost }) unless an answer for these key
+ * parts is already in the cache. A cached answer keeps what it cost.
+ */
+export async function withCache(cacheDir, parts, fn) {
+  if (!cacheDir) return { ...(await fn()), hit: false };
+  mkdirSync(cacheDir, { recursive: true });
+  const key = createHash("sha256").update([PROMPT_VERSION, ...parts].join("\0")).digest("hex");
+  const file = join(cacheDir, `${key.slice(0, 32)}.json`);
+  if (existsSync(file)) return { ...JSON.parse(readFileSync(file, "utf8")), hit: true };
+  const res = await fn();
+  writeFileSync(file, JSON.stringify(res));
+  return { ...res, hit: false };
+}
+
+const flat = (s) => String(s).toLowerCase().replace(/[`*]/g, "").replace(/\s+/g, " ").trim();
+const escape = (s) => s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+
+/** True when `words` is in the chunk's code fences and nowhere in its sentences. */
+export function onlyInFence(words, chunkText) {
+  const q = flat(words);
+  if (!q || !flat(chunkText).includes(q)) return false;
+  return !new RegExp(`(^|[^a-z0-9_])${escape(q)}($|[^a-z0-9_])`).test(flat(prose(chunkText)));
+}
+
+/**
+ * What the labeller is told to leave out, enforced in code because it does
+ * not always comply: terms the reader already knows, and names and stumbles
+ * that exist only inside a code fence (a sample's identifiers are not the
+ * document's vocabulary).
+ */
+export function screen(events, chunk, knows) {
+  const known = (k) => knows.some((t) => norm(t) === norm(k.surface) || norm(t) === norm(k.id.replace(/-/g, " ")));
+  return {
+    ...events,
+    concepts: (events.concepts ?? []).filter((k) => !known(k) && !onlyInFence(k.surface, chunk.text)),
+    stumbles: (events.stumbles ?? []).filter((s) => !onlyInFence(s.quote, chunk.text)),
+  };
+}
+
+/**
  * Read the chunks in order and build the log.
  * @param {object} opts reader, knows, model, run (which sample this is), cacheDir, onProgress, call (injectable for tests)
  */
 export async function buildLog(chunks, opts) {
   const { reader, knows = [], model = "haiku", run = 0, cacheDir, onProgress = () => {}, call = callClaude } = opts;
   const log = newLog({ reader, knows, model });
-  if (cacheDir) mkdirSync(cacheDir, { recursive: true });
 
   for (const c of chunks) {
     const before = chunks.slice(Math.max(0, c.n - 3), c.n - 1);
@@ -179,28 +231,20 @@ export async function buildLog(chunks, opts) {
     // The prompt contains the log so far, so a cached answer is reused only
     // when everything the reader knew at this point is unchanged.
     // Each run is an independent sample, so each keeps its own cached answers.
-    const key = createHash("sha256").update([PROMPT_VERSION, model, run, SYSTEM, prompt].join("\0")).digest("hex");
-    const file = cacheDir && join(cacheDir, `${key.slice(0, 32)}.json`);
-
-    // A cached answer keeps what it cost, so log.cost is always the cost of
-    // building this log from nothing.
-    let events, cost = 0, cached = false;
-    if (file && existsSync(file)) {
-      ({ events, cost } = JSON.parse(readFileSync(file, "utf8")));
-      cached = true;
-    } else {
-      let lastErr;
-      for (let attempt = 0; attempt < 2 && !events; attempt++) {
-        try { ({ events, cost } = await call(prompt, model)); } catch (e) { lastErr = e; }
+    const { output, cost, hit } = await withCache(cacheDir, [model, run, SYSTEM, prompt], async () => {
+      let res, lastErr;
+      for (let attempt = 0; attempt < 2 && !res; attempt++) {
+        try { res = await call(prompt, model); } catch (e) { lastErr = e; }
       }
-      if (!events) throw lastErr;
-      if (file) writeFileSync(file, JSON.stringify({ events, cost }));
-    }
+      if (!res) throw lastErr;
+      return { output: res.events, cost: res.cost };
+    });
+    const events = screen(output, c, knows);
     for (const k of events.concepts) k.id = kebab(k.id);
     applyEvents(log, c, events);
     log.cost += cost;
-    if (cached) log.cached += 1;
-    onProgress({ chunk: c, cached, total: chunks.length });
+    if (hit) log.cached += 1; else log.paid += cost;
+    onProgress({ chunk: c, cached: hit, total: chunks.length });
   }
   return log;
 }

@@ -20,10 +20,13 @@ for whoever changes it.
   it, so an edit here is live at once.
   - `SKILL.md`: what the agent follows.
   - `scripts/cold-read.mjs`: the CLI. `scripts/lib/` holds one module per
-    stage: `chunk` (markdown to chunks), `label` (the blind reader), `log`
-    (folding events into the log), `settle` (the whole-log pass that closes
-    threads), `check` (the flags), `plan` (the plan format, its own check, and its diff),
-    `render` (outline and report).
+    stage: `chunk` (markdown to chunks), `label` (the blind reader, its cache,
+    and the screen that drops what it was told to leave out), `log` (folding
+    events into the log), `settle` (the whole-log pass that closes threads),
+    `check` (the flags), `plan` (the plan format, its own check, and its
+    diff), `length` (counting the text against the lengths a plan sets),
+    `left` (rounds: flags left with a reason, which flags are new, when a
+    round is quiet), `render` (outline and report).
 - `test/`: `node --test`, no dependencies.
 - `eval/<case>/`: a document as it was before someone fixed it by hand, and
   `expected.json` listing what they fixed.
@@ -39,6 +42,10 @@ for whoever changes it.
   add what it needs to the log as a new event, then check that in code.
 - **Model calls go through `claude -p`**, tool-less, with `--json-schema`
   (`claude()` in `label.mjs`). No SDK, no API key.
+- **When the blind reader ignores an instruction, enforce it in code.** It
+  is a cheap model and will keep listing what it was told to leave out.
+  `screen()` in `label.mjs` drops those after the fact, where a test can hold
+  it.
 - **Measure a prompt change.** Run `just eval` before and after and put both
   score lines in the commit message. Labels vary between readings, so one
   known problem flipping is noise.

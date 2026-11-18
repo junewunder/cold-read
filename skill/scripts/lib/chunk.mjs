@@ -13,6 +13,19 @@ const LONG_LIST_WORDS = 40;
 
 const words = (s) => s.split(/\s+/).filter(Boolean).length;
 
+/** A chunk's text without its code fences: the part written in sentences. */
+export function prose(text) {
+  const out = [];
+  let marker = null;
+  for (const l of text.split("\n")) {
+    if (marker) { if (l.trim().startsWith(marker)) marker = null; continue; }
+    const f = l.match(FENCE);
+    if (f) { marker = f[1][0].repeat(3); continue; }
+    out.push(l);
+  }
+  return out.join("\n");
+}
+
 /** @returns {{n:number, section:string, kind:string, start:number, end:number, text:string}[]} */
 export function chunk(markdown) {
   const lines = markdown.replace(/\r\n/g, "\n").split("\n");

@@ -6,30 +6,38 @@
 //
 //   Reader: someone who has never seen the project.
 //   Knows: git, Claude Code, skill
+//   Length: 120 lines
 //
 //   ## Install
+//   Length: 15 lines
 //   1. Say how to install it.
 //      - defines: toy factory
 //      - uses: skill, unit
+//      - mentions: Homebrew
 //      - opens: what the questions are
 //      - closes: where questions collect
 //      - contrasts: point 4
 //      - because: a bad unit would otherwise be built on
 //      - example of: unit
 //
-// The last three are links: ties from this point to something else. A contrast
-// needs its other side to exist, so "contrasts:" names another point or a term.
+// "mentions:" lists names the point brings up without explaining, which the
+// reader is not expected to know and the text must not lean on. The last three
+// keys are links: ties from this point to something else. A contrast needs its
+// other side to exist, so "contrasts:" names another point or a term. Points
+// are numbered through the whole plan, not per section, whatever numbers are
+// written: "point 5" is the fifth numbered line.
 
-import { norm, contained, check } from "./check.mjs";
+import { norm, contained, looseContained, appearsIn, check } from "./check.mjs";
 import { newLog, applyEvents, kebab } from "./log.mjs";
+import { parseLength, checkPlanLength } from "./length.mjs";
 
-const KEYS = ["defines", "uses", "opens", "closes"];
+const KEYS = ["defines", "uses", "mentions", "opens", "closes"];
 const LINK_KEYS = { contrasts: "contrast", because: "reason", "example of": "example" };
 
 export const splitList = (s) => String(s).split(",").map((t) => t.trim()).filter(Boolean);
 
 export function parsePlan(text) {
-  const plan = { title: "", reader: "", knows: [], points: [] };
+  const plan = { title: "", reader: "", knows: [], length: null, sections: [], points: [] };
   let section = "", point = null, inReader = false;
 
   let lineNo = 0;
@@ -38,11 +46,24 @@ export function parsePlan(text) {
     lineNo++;
     let m;
     if ((m = line.match(/^#\s+(?:Plan|Outline):?\s*(.*)$/i))) { plan.title = m[1]; inReader = false; continue; }
-    if ((m = line.match(/^#{2,6}\s+(.*)$/))) { section = m[1].trim(); point = null; inReader = false; continue; }
+    if ((m = line.match(/^#{2,6}\s+(.*)$/))) {
+      section = m[1].trim(); point = null; inReader = false;
+      plan.sections.push({ name: section, line: lineNo, length: null });
+      continue;
+    }
+    if ((m = line.match(/^Length:\s*(.*)$/i))) {
+      const length = parseLength(m[1]);
+      if (length) {
+        if (plan.sections.length) plan.sections.at(-1).length = { ...length, line: lineNo };
+        else plan.length = { ...length, line: lineNo };
+      }
+      inReader = false;
+      continue;
+    }
     if ((m = line.match(/^Reader:\s*(.*)$/i))) { plan.reader = m[1].trim(); inReader = true; continue; }
     if ((m = line.match(/^Knows:\s*(.*)$/i))) { plan.knows = splitList(m[1]); inReader = false; continue; }
     if ((m = line.match(/^\d+[.)]\s+(.*)$/))) {
-      point = { n: plan.points.length + 1, section, line: lineNo, text: m[1].replace(/\s*\(lines? [\d–-]+\)\s*$/, "").trim(), defines: [], uses: [], opens: [], closes: [], links: [] };
+      point = { n: plan.points.length + 1, section, line: lineNo, text: m[1].replace(/\s*\(lines? [\d–-]+\)\s*$/, "").trim(), defines: [], uses: [], mentions: [], opens: [], closes: [], links: [] };
       plan.points.push(point);
       inReader = false;
       continue;
@@ -67,7 +88,9 @@ export function parsePlan(text) {
 }
 
 const conceptNames = (c) => [c.id.replace(/-/g, " "), ...c.surfaces];
-const matches = (term, c) => conceptNames(c).some((name) => norm(name) === norm(term) || contained(name, term));
+// Word endings are ignored here: a plan that says "lift" is matched by a text that says "lifted".
+const matches = (term, c) => conceptNames(c).some((name) => norm(name) === norm(term) || looseContained(name, term));
+const allMentions = (plan) => plan.points.flatMap((p) => p.mentions ?? []);
 
 /**
  * The plan is itself a log: each point is an entry that explains terms, relies
@@ -96,8 +119,10 @@ export function planAsLog(plan) {
 /** Check a plan on its own. Line numbers in the flags are lines of the plan file. */
 export function checkPlan(plan) {
   const log = planAsLog(plan);
-  const flags = check(log);
-  const terms = [...plan.knows, ...plan.points.flatMap((p) => [...p.defines, ...p.uses])];
+  // A mention is not an event in the plan's log, so a point that relies on a
+  // name the plan only mentions is flagged like any other unexplained term.
+  const flags = [...check(log), ...checkPlanLength(plan)];
+  const terms = [...plan.knows, ...plan.points.flatMap((p) => [...p.defines, ...p.uses, ...(p.mentions ?? [])])];
 
   for (const p of plan.points) {
     for (const what of p.closes) {
@@ -124,15 +149,21 @@ export function checkPlan(plan) {
 /**
  * Compare a plan with the log of the text written from it.
  * `pointMatch` (optional) maps plan point number -> chunk numbers that carry it out.
+ * `text` (optional) is the document, used only to look a planned term up in it.
  */
-export function diffPlan(plan, log, pointMatch = null) {
+export function diffPlan(plan, log, pointMatch = null, text = "") {
   const flags = [];
   const concepts = Object.values(log.concepts);
   const line = (n) => log.entries.find((e) => e.n === n)?.start ?? 0;
 
   for (const p of plan.points) {
     for (const term of p.defines) {
-      const c = concepts.find((c) => matches(term, c));
+      // Prefer a concept the text explains: "lifter" explained and "lifted code" used both match "lift".
+      const found = concepts.filter((c) => matches(term, c));
+      const c = found.find((c) => c.definedAt) ?? found[0];
+      // The words are in the text and the reader never noted them as a term:
+      // they read as ordinary words, and no reader is left short.
+      if (!c && appearsIn(term, text)) continue;
       if (!c || !c.definedAt) {
         flags.push({
           kind: "missing", level: "error", n: c?.firstAt ?? 0, line: c ? line(c.firstAt) : 0, term,
@@ -144,7 +175,7 @@ export function diffPlan(plan, log, pointMatch = null) {
     }
   }
 
-  const planned = plan.points.flatMap((p) => [...p.defines, ...p.uses]);
+  const planned = plan.points.flatMap((p) => [...p.defines, ...p.uses, ...(p.mentions ?? [])]);
   for (const c of concepts) {
     if (planned.some((t) => matches(t, c))) continue;
     if ((log.knows ?? []).some((t) => conceptNames(c).some((name) => norm(name) === norm(t)))) continue;
@@ -191,6 +222,8 @@ export function diffPlan(plan, log, pointMatch = null) {
 }
 
 /** The plan points and the log's purposes, as the point-matcher sees them. */
+export { allMentions };
+
 export function matchPrompt(plan, log) {
   const points = plan.points.map((p) => `P${p.n} [${p.section || "top"}] ${p.text}`).join("\n");
   const parts = log.entries.map((e) => `C${e.n} [${e.section || "top"}] ${e.purpose}`).join("\n");

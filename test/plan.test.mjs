@@ -102,7 +102,8 @@ test("links parse, and a plan is checked like a log before any text exists", asy
   ]);
   assert.deepEqual(plan.points[1].links, [{ type: "example", about: "lane" }]);
 
-  const { flags } = checkPlan(plan);
+  // (This plan sets no length, which is a warning of its own; see rounds.test.mjs.)
+  const flags = checkPlan(plan).flags.filter((f) => f.kind !== "long");
   assert.deepEqual(flags.map((f) => [f.kind, f.line]), [
     ["undefined", 7],   // point 1 uses "lane" before point 2 defines it
     ["dangling", 13],   // point 3 contrasts with a term no point has

@@ -1,11 +1,14 @@
 // The log: what the document has told its reader, chunk by chunk. It is the
 // thing the checks run over, and it holds no document text beyond short quotes.
 
+import { norm } from "./check.mjs";
+
 export const kebab = (s) =>
   String(s).toLowerCase().replace(/[`*_"']/g, "").replace(/[^a-z0-9]+/g, "-").replace(/^-+|-+$/g, "");
 
 export function newLog({ reader, knows = [], model }) {
-  return { version: 1, reader, knows, model, cost: 0, cached: 0, entries: [], concepts: {}, threads: [] };
+  // cost is what building this log from nothing costs; paid is what this run spent, the rest having come from the cache.
+  return { version: 1, reader, knows, model, cost: 0, paid: 0, cached: 0, entries: [], concepts: {}, threads: [] };
 }
 
 /** Fold one chunk's events into the log. */
@@ -17,12 +20,19 @@ export function applyEvents(log, c, events) {
     links: (events.links ?? []).map((l) => ({ type: l.type, about: l.about.trim(), stated: l.stated !== false, quote: (l.quote ?? "").trim() })),
   };
 
-  for (const k of events.concepts ?? []) {
+  for (let k of events.concepts ?? []) {
     if (!k.id) continue;
+    const surface = k.surface.trim();
+    // The labeller sometimes gives a thing it has already met a second id
+    // ("checkpoint", then "checkpoints"). A name the log already has is that concept.
+    if (!log.concepts[k.id]) {
+      const name = norm(surface || k.id);
+      const twin = Object.values(log.concepts).find((x) => [x.id.replace(/-/g, " "), ...x.surfaces].some((s) => norm(s) === name));
+      if (twin) k = { ...k, id: twin.id };
+    }
     const known = log.concepts[k.id] ??= {
       id: k.id, surfaces: [], definedAt: null, gloss: "", firstAt: c.n, uses: [],
     };
-    const surface = k.surface.trim();
     if (surface && !known.surfaces.some((s) => s.toLowerCase() === surface.toLowerCase())) {
       known.surfaces.push(surface);
     }

@@ -16,19 +16,35 @@ export function norm(term) {
 }
 
 const STOP = new Set(["of", "and", "to", "for", "in", "on", "with", "before", "after", "by", "or", "a", "an", "the"]);
-const wordsOf = (s) => norm(s).split(" ").filter((w) => w && !STOP.has(w));
+export const wordsOf = (s) => norm(s).split(" ").filter((w) => w && !STOP.has(w));
 // "review" and "reviewer" count as one word.
-const akin = (a, b) => a === b || (Math.min(a.length, b.length) >= 4 && (a.startsWith(b) || b.startsWith(a)));
-/** Two names are the same name when they share a content word ("unit of work", "trial units"). */
-export const sameName = (a, b) => wordsOf(a).some((x) => wordsOf(b).some((y) => akin(x, y)));
+export const akin = (a, b) => a === b || (Math.min(a.length, b.length) >= 4 && (a.startsWith(b) || b.startsWith(a)));
+
+/** A word without its ending: "lifted", "lifter" and "lifting" are "lift"; "modded" is "mod". */
+export function stem(w) {
+  let s = w.replace(/(ing|ed|er|es|(?<!s)s)$/, (m) => (w.length - m.length >= 3 ? "" : m));
+  // "modded" loses its ending and then its doubled letter; "class" lost nothing and keeps both.
+  if (s !== w && s.length > 3 && /([b-df-hj-np-tv-z])\1$/.test(s)) s = s.slice(0, -1);
+  if (s.length > 4 && s.endsWith("e")) s = s.slice(0, -1);
+  return s;
+}
+const stemsOf = (s) => wordsOf(s).map(stem);
+/** Two names are the same name when they share a content word ("unit of work", "trial units"; "lifter", "lifted code"). */
+export const sameName = (a, b) => wordsOf(a).some((x) => wordsOf(b).some((y) => akin(x, y) || stem(x) === stem(y)));
 
 const lineOf = (log, n) => log.entries.find((e) => e.n === n)?.start ?? 0;
 const times = (k) => (k === 1 ? "once" : `${k} times`);
 
-export function check(log) {
+/**
+ * @param {object} log
+ * @param {{mentions?: string[]}} opts names the plan says the text brings up
+ *   without explaining. Like what the reader knows, they are never flagged.
+ */
+export function check(log, { mentions = [] } = {}) {
   const flags = [];
   // What the reader is declared to know is looked up here, not left to the labeller.
-  const known = (c) => (log.knows ?? []).some((k) => [c.id.replace(/-/g, " "), ...c.surfaces].some((s) => norm(s) === norm(k)));
+  const passed = [...(log.knows ?? []), ...mentions];
+  const known = (c) => passed.some((k) => [c.id.replace(/-/g, " "), ...c.surfaces].some((s) => norm(s) === norm(k)));
 
   for (const c of Object.values(log.concepts)) {
     if (known(c)) continue;
@@ -89,6 +105,17 @@ export const contained = (a, b) => {
   const A = wordsOf(a), B = wordsOf(b);
   return A.length > 0 && B.length > 0 && (A.every((w) => B.includes(w)) || B.every((w) => A.includes(w)));
 };
+/** The same, with word endings ignored: "lift" and "lifted code". Used to match a plan's terms to the text's. */
+export const looseContained = (a, b) => {
+  const A = stemsOf(a), B = stemsOf(b);
+  return A.length > 0 && B.length > 0 && (A.every((w) => B.includes(w)) || B.every((w) => A.includes(w)));
+};
+/** Whether the words of `term` all appear in `text`, endings ignored. */
+export const appearsIn = (term, text) => {
+  const have = new Set(stemsOf(String(text).replace(/[.,;:!?)]+(\s|$)/g, " ")));
+  const want = stemsOf(term);
+  return want.length > 0 && want.every((w) => have.has(w));
+};
 const overlap = (a, b) => {
   const A = new Set(wordsOf(a)), B = new Set(wordsOf(b));
   const both = [...A].filter((w) => B.has(w)).length;
@@ -99,10 +126,22 @@ const overlap = (a, b) => {
 export function sameFlag(a, b) {
   if (a.kind !== b.kind) return false;
   if (a.term && b.term) return contained(a.term, b.term);
-  if (["dropped", "link", "dangling"].includes(a.kind)) return a.message === b.message;
+  if (["dropped", "link", "dangling", "long"].includes(a.kind)) return a.message === b.message;
   if (a.n !== b.n) return false;
   if (a.quote && b.quote) return contained(a.quote, b.quote) || overlap(a.quote, b.quote) >= 0.5;
   return true;
+}
+
+/**
+ * Whether two flags from different rounds are the same problem. Between rounds
+ * the text was edited, so chunk numbers have moved and cannot be compared: a
+ * flag is known by its term, or by the words of the document it quotes.
+ */
+export function sameProblem(a, b) {
+  if (a.kind !== b.kind) return false;
+  if (a.term && b.term) return contained(a.term, b.term);
+  if (a.quote && b.quote) return contained(a.quote, b.quote) || overlap(a.quote, b.quote) >= 0.5;
+  return !a.term && !b.term && !a.quote && !b.quote && a.message === b.message;
 }
 
 /**
