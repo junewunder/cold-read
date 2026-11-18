@@ -1,0 +1,21 @@
+{
+  "source": "wfactory README at commit ee9fd85, before a hand-done pass that read it top to bottom and listed what a newcomer had not been told. These are the problems that pass found and fixed.",
+  "reader": "One developer with a personal project and a Claude Max plan. They use Claude Code daily. They have never seen wfactory and know nothing about how it works inside.",
+  "knows": ["Claude Code", "agent", "skill", "session", "git", "branch", "main", "merge", "test suite", "TypeScript", "bash", "node", "curl", "jq", "systemd"],
+  "problems": [
+    { "id": "check-unexplained", "what": "\"check\" has no explanation or example until two-thirds of the way down", "match": "\\bcheck\\b", "kinds": ["undefined", "open"] },
+    { "id": "tracker", "what": "\"the tracker\" is used five times and never explained", "match": "tracker", "kinds": ["undefined", "open"] },
+    { "id": "that-part", "what": "\"That part\" could be the setup conversation or the program underneath", "match": "That part", "kinds": ["stumble"] },
+    { "id": "git-remote", "what": "\"With a git remote\" raises a question nothing answers", "match": "git remote", "kinds": ["open", "stumble"] },
+    { "id": "one-place", "what": "\"collect in one place\" does not say where", "match": "one place|where.*question", "kinds": ["open", "stumble"] },
+    { "id": "all-code", "what": "\"All of these are code\" contrasts with prompt-only rules the text no longer mentions", "match": "are code", "kinds": ["open", "stumble"] },
+    { "id": "reviewer-names", "what": "\"reviewer agent\" and \"fresh read-only session\" are two names for one thing", "match": "reviewer agent", "kinds": ["alias", "undefined"] },
+    { "id": "done-disagrees", "what": "the enforcement list and step 3 disagree about what decides \"done\"", "match": "done", "kinds": ["stumble"] },
+    { "id": "shared-code", "what": "\"shared code\" is stated without saying what it is or why it matters", "match": "shared code", "kinds": ["undefined", "open", "stumble"] },
+    { "id": "broken-main", "what": "\"a broken main\" is stated without saying what broken means", "match": "broken main", "kinds": ["undefined", "open", "stumble"] },
+    { "id": "fleet", "what": "\"fleet\" is never introduced", "match": "fleet", "kinds": ["undefined", "open", "stumble"] },
+    { "id": "rules", "what": "\"the rules\" are never introduced", "match": "\\brules\\b", "kinds": ["undefined", "open", "stumble"] },
+    { "id": "factory-spec", "what": "\"factory spec\" is never introduced", "match": "factory spec", "kinds": ["undefined", "open", "stumble"] },
+    { "id": "usage-limits", "what": "the second paragraph promises usage limits and nothing delivers them", "match": "usage", "kinds": ["undefined", "open"] }
+  ]
+}

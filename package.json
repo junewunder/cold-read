@@ -1,0 +1,11 @@
+{
+  "name": "cold-read",
+  "version": "0.1.0",
+  "description": "Check prose the way a first-time reader meets it.",
+  "type": "module",
+  "license": "MIT",
+  "private": true,
+  "bin": { "cold-read": "skill/scripts/cold-read.mjs" },
+  "scripts": { "test": "node --test test/" },
+  "engines": { "node": ">=20" }
+}
