@@ -1,7 +1,7 @@
 import { test } from "node:test";
 import assert from "node:assert/strict";
 import { newLog, applyEvents } from "../skill/scripts/lib/log.mjs";
-import { check, norm, sameName } from "../skill/scripts/lib/check.mjs";
+import { check, norm, sameName, mergeFlags, foldUnplanned } from "../skill/scripts/lib/check.mjs";
 import { buildLog, describeLog } from "../skill/scripts/lib/label.mjs";
 import { settlePrompt, applySettled } from "../skill/scripts/lib/settle.mjs";
 
@@ -103,4 +103,29 @@ test("the labeller sees the log so far and nothing after the current chunk", asy
   assert.equal(log.entries.length, 4);
   assert.ok(Math.abs(log.cost - 0.04) < 1e-9);
   assert.match(describeLog(log), /alpha-thing/);
+});
+
+test("flags from several readings merge, counting how many readings raised each", () => {
+  const flag = (kind, n, extra) => ({ kind, level: "warn", n, line: n * 10, message: "m", ...extra });
+  const merged = mergeFlags([
+    [flag("undefined", 1, { term: "the tracker" }), flag("stumble", 2, { quote: "That part is an ordinary program" })],
+    [flag("undefined", 1, { term: "tracker" }), flag("stumble", 2, { quote: "That part" }), flag("stumble", 2, { quote: "with no model in it" })],
+    [flag("undefined", 3, { term: "headless session" })],
+  ]);
+  assert.deepEqual(merged.map((f) => [f.kind, f.term ?? f.quote, f.seen, f.of]), [
+    ["undefined", "the tracker", 2, 3],
+    ["stumble", "That part is an ordinary program", 2, 3],
+    ["stumble", "with no model in it", 1, 3],
+    ["undefined", "headless session", 1, 3],
+  ]);
+});
+
+test("an unexplained term that is also outside the plan is reported once", () => {
+  const flags = foldUnplanned([
+    { kind: "undefined", term: "lane", message: '"lane" is never explained.' },
+    { kind: "unplanned", term: "lanes", message: "x" },
+    { kind: "unplanned", term: "ScholarPhi", message: "y" },
+  ]);
+  assert.deepEqual(flags.map((f) => f.kind), ["undefined", "unplanned"]);
+  assert.match(flags[0].message, /never explained\. It is not in the plan\.$/);
 });

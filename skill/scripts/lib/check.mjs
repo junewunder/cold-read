@@ -76,3 +76,54 @@ export function check(log) {
 
   return flags.sort((a, b) => a.n - b.n || a.kind.localeCompare(b.kind));
 }
+
+const contained = (a, b) => {
+  const A = wordsOf(a), B = wordsOf(b);
+  return A.length > 0 && B.length > 0 && (A.every((w) => B.includes(w)) || B.every((w) => A.includes(w)));
+};
+const overlap = (a, b) => {
+  const A = new Set(wordsOf(a)), B = new Set(wordsOf(b));
+  const both = [...A].filter((w) => B.has(w)).length;
+  return both / Math.max(1, A.size + B.size - both);
+};
+
+/** Whether two flags from different runs point at the same problem. */
+export function sameFlag(a, b) {
+  if (a.kind !== b.kind) return false;
+  if (a.term && b.term) return contained(a.term, b.term);
+  if (a.kind === "dropped") return a.message === b.message;
+  if (a.n !== b.n) return false;
+  if (a.quote && b.quote) return contained(a.quote, b.quote) || overlap(a.quote, b.quote) >= 0.5;
+  return true;
+}
+
+/**
+ * The labeller is a sample: the same model on the same text flags a problem in
+ * one run and misses it in the next. So read the document several times and
+ * merge. Each merged flag carries `seen`, how many of the `of` runs raised it.
+ */
+export function mergeFlags(perRun) {
+  const merged = [];
+  perRun.forEach((flags, run) => {
+    for (const f of flags) {
+      const hit = merged.find((m) => sameFlag(m, f));
+      if (hit) hit.runs.add(run);
+      else merged.push({ ...f, runs: new Set([run]) });
+    }
+  });
+  return merged
+    .map(({ runs, ...f }) => ({ ...f, seen: runs.size, of: perRun.length }))
+    .sort((a, b) => a.n - b.n || a.kind.localeCompare(b.kind));
+}
+
+/** A term that is unexplained and also absent from the plan is one problem, said once. */
+export function foldUnplanned(flags) {
+  const out = [];
+  for (const f of flags) {
+    if (f.kind !== "unplanned") { out.push(f); continue; }
+    const twin = flags.find((d) => d.kind === "undefined" && contained(d.term, f.term));
+    if (twin) { if (!twin.message.endsWith("plan.")) twin.message += " It is not in the plan."; }
+    else out.push(f);
+  }
+  return out;
+}

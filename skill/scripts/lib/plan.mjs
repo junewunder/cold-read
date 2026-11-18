@@ -117,7 +117,7 @@ export function diffPlan(plan, log, pointMatch = null) {
 export function matchPrompt(plan, log) {
   const points = plan.points.map((p) => `P${p.n} [${p.section || "top"}] ${p.text}`).join("\n");
   const parts = log.entries.map((e) => `C${e.n} [${e.section || "top"}] ${e.purpose}`).join("\n");
-  return `A writer planned a document as a list of points, then wrote it. Below are the planned points and, separately, a list of what each part of the finished text does. For every planned point, list the numbers of the parts that carry it out. A part may serve one point, and a point may take several parts or none. Match on what is done, not on wording, and leave a point empty when no part does it.\n\n<planned_points>\n${points}\n</planned_points>\n\n<parts_of_the_text>\n${parts}\n</parts_of_the_text>`;
+  return `A writer planned a document as a list of points, then wrote it. Below are the planned points and, separately, a list of what each part of the finished text does. For every planned point, list the numbers of the parts that carry it out. A point may take several parts or none. A part that supports, illustrates or adds detail to a point serves that point. Match on what is done, not on wording, and leave a point empty when no part does it.\n\n<planned_points>\n${points}\n</planned_points>\n\n<parts_of_the_text>\n${parts}\n</parts_of_the_text>`;
 }
 
 export const MATCH_SCHEMA = {

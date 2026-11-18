@@ -11,7 +11,7 @@ for whoever changes it.
 
 - `just test`: the unit tests. No model calls; they must stay that way.
 - `just eval`: runs the CLI on `eval/wfactory/` and scores it against
-  problems found by hand. About 3 minutes and 5 cents on Haiku.
+  problems found by hand. About 3 minutes and 10 cents on Haiku.
 - `just check <doc>`: cold-read any document.
 
 ## Layout
@@ -40,7 +40,7 @@ for whoever changes it.
 - **Model calls go through `claude -p`**, tool-less, with `--json-schema`
   (`claude()` in `label.mjs`). No SDK, no API key.
 - **Measure a prompt change.** Run `just eval` before and after and put both
-  score lines in the commit message. Labels vary between runs, so one known
-  problem flipping is noise.
+  score lines in the commit message. Labels vary between readings, so one
+  known problem flipping is noise.
 - No runtime dependencies. Node's standard library only.
 - This repo is public. Eval cases come from documents that are already public.

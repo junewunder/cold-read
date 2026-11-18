@@ -9,7 +9,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { newLog, applyEvents, kebab } from "./log.mjs";
 
-export const PROMPT_VERSION = 6;
+export const PROMPT_VERSION = 7;
 
 const SYSTEM = `You read a document on behalf of one specific reader, one chunk at a time, in order. You record what each chunk does to that reader's knowledge. Your records become a log that is checked by a program, so follow the definitions below exactly.
 
@@ -19,7 +19,7 @@ Record these for the current chunk only:
 
 purpose: what this chunk does for the reader, as one short clause starting with a verb ("says what the tool is", "lists the install requirements").
 
-concepts: each named thing in this chunk that the reader does NOT already know from their background: a term the document coins or uses in its own sense, a component, a command, a file, a role, a product. Leave out ordinary words, anything the reader's background covers, and a file or link that the chunk only points to for more detail. For each one:
+concepts: each named thing in this chunk that the reader does NOT already know from their background: a term the document coins or uses in its own sense, a component, a command, a file, a role, a product. Leave out ordinary words, anything the reader's background covers, a file or link that the chunk only points to for more detail, and a word the text only quotes or mentions as an example, where the reader is not expected to know what it means. Text inside a code fence is a command, sample output or an example file: a term that appears only inside a fence is not a concept, and nothing inside a fence is a stumble. For each one:
 - id: if it is the same thing as a concept already in the log, use that id, even when this chunk calls it by a different name. Otherwise a new short lowercase id.
 - surface: the name as this chunk writes it: a noun phrase of one to four words ("tracker", not "the tracker that records units"). A clause or a verb phrase ("more are opt-in", "reviews the branch") is not a concept.
 - event: "defines" only if this chunk SAYS what the thing is or does: a definition, an example, a gloss in brackets or after a comma, or a link's own description. "uses" if the chunk relies on the reader knowing it. If you can only guess the meaning from how the sentence uses the word ("a lane claims the next unit from the tracker" does not say what a tracker is), that is "uses".
@@ -143,10 +143,10 @@ const callClaude = async (prompt, model) => {
 
 /**
  * Read the chunks in order and build the log.
- * @param {object} opts reader, model, cacheDir, onProgress, call (injectable for tests)
+ * @param {object} opts reader, knows, model, run (which sample this is), cacheDir, onProgress, call (injectable for tests)
  */
 export async function buildLog(chunks, opts) {
-  const { reader, knows = [], model = "haiku", cacheDir, onProgress = () => {}, call = callClaude } = opts;
+  const { reader, knows = [], model = "haiku", run = 0, cacheDir, onProgress = () => {}, call = callClaude } = opts;
   const log = newLog({ reader, knows, model });
   if (cacheDir) mkdirSync(cacheDir, { recursive: true });
 
@@ -155,7 +155,8 @@ export async function buildLog(chunks, opts) {
     const prompt = userPrompt(reader, log, before, c);
     // The prompt contains the log so far, so a cached answer is reused only
     // when everything the reader knew at this point is unchanged.
-    const key = createHash("sha256").update([PROMPT_VERSION, model, SYSTEM, prompt].join("\0")).digest("hex");
+    // Each run is an independent sample, so each keeps its own cached answers.
+    const key = createHash("sha256").update([PROMPT_VERSION, model, run, SYSTEM, prompt].join("\0")).digest("hex");
     const file = cacheDir && join(cacheDir, `${key.slice(0, 32)}.json`);
 
     // A cached answer keeps what it cost, so log.cost is always the cost of

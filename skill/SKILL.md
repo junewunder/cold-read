@@ -17,8 +17,10 @@ node <skill-dir>/scripts/cold-read.mjs check <doc.md> --reader "<who>" --knows "
 node <skill-dir>/scripts/cold-read.mjs outline <doc.md> --reader "<who>" --knows "<a, b, c>"
 ```
 
-`<skill-dir>` is the folder this file is in. A chunk takes about 8 seconds and
-a README about 3 minutes and 5 cents, so run it in the background. It prints
+`<skill-dir>` is the folder this file is in. The reader's labels vary from one
+reading to the next, so `check` reads the document twice, side by side, and
+merges the flags; `--runs 3` reads it three times. A README takes about 3
+minutes and 10 cents, so run it in the background. It prints
 the report and writes the log, outline and report to the **state dir**
 (`~/.local/share/cold-read/<project>/`), whose paths it prints. Exit 1 means at
 least one flag is an error.
@@ -114,6 +116,8 @@ makes the reader wonder, `closes:` a thread it settles. Every key is optional.
 | unplanned | warning | a term in the text that the plan does not have |
 | extra | warning | a part of the text that serves no plan point |
 
-Labels vary a little between runs, so a flag is a place to look and never a
-verdict. Whether a claim is true, the tone, and the length are outside what a
+With more than one reading, each flag says how many readings raised it. One
+raised by every reading is the surest; one raised by a single reading is still
+worth a look, and half the real problems arrive that way. A flag is a place to
+look and never a verdict. Whether a claim is true, the tone, and the length are outside what a
 cold read sees: use reviewers and the `humanizer` skill for those.

@@ -12,26 +12,30 @@ relied on, what was promised. Those records are the **log**. Ordinary code then
 reads the log and raises a **flag** wherever the reader was left short.
 
 This is part of what it said about an older README of
-[wfactory](https://github.com/junewunder/wfactory):
+[wfactory](https://github.com/junewunder/wfactory), another project of mine.
+The blind reader doesn't give the same answers twice, so here it read the
+document three times, and each flag says how many of those readings raised
+it:
 
 ```
-## Used before it is explained (10)
+## Used before it is explained
 
-- line 3: "check you trust" is used at line 3 but only explained later, at line 22.
-- line 8: "the tracker" is used at line 8 but only explained later, at line 22.
-- line 94: "run records" is used once (first at line 94) and never explained.
+- line 8: "tracker" is used 5 times (first at line 8) and never explained. (3 of 3 readings)
+- line 8: "check" is used 5 times (first at line 8) and never explained. (3 of 3 readings)
+- line 62: "protections" is used at line 62 but only explained later, at line 92. (1 of 3 readings)
 
-## One thing, several names (1)
+## One thing, several names
 
-- line 53: One thing has 2 names: "fresh read-only session" (line 24), "reviewer agent" (line 53).
+- line 53: One thing has 2 names: "fresh read-only session" (line 24), "reviewer agent" (line 53). (2 of 3 readings)
 
-## Raised and never settled (1)
+## Raised and never settled
 
-- line 24: Raises "behavior without a git remote" and nothing later settles it. Text: "With a git remote"
+- line 24: Raises "what happens to the branch when there is no git remote, since review
+  and merge are conditional on one" and nothing later settles it. (3 of 3 readings)
 ```
 
-It's brand new. There is one measured run, described below, and nobody but me
-has tried it.
+It's brand new. It has been measured on one document, described below, and
+nobody but me has tried it.
 
 ## Install
 
@@ -61,8 +65,11 @@ that reader already has. Those are looked up by the code and never flagged.
 
 A flag is a place to look. For each one you fix the text, or add the term to
 `--knows` because this reader does have it, or leave it because the blind
-reader got it wrong. A rerun reuses its earlier answers for every chunk above
-your first edit.
+reader got it wrong. The blind reader's answers are cached, so a rerun only
+pays for the chunks from your first edit down.
+
+`check` reads the document twice and merges the flags. `--runs 3` reads it
+three times.
 
 | Flag | What the log shows |
 |---|---|
@@ -103,7 +110,8 @@ Then the agent writes the text, and `check --plan plan.md` adds four flags:
 For a document that already exists, `outline` prints the log in the same
 format: what each part of the text does, and what it explains and relies on.
 That **outline** is the plan the text actually follows. Edit it into the plan
-you want and hand it back.
+you want, have the agent revise the text, and check the result with
+`check --plan`.
 
 This README was written from [docs/README.plan.md](docs/README.plan.md).
 
@@ -112,30 +120,46 @@ This README was written from [docs/README.plan.md](docs/README.plan.md).
 There is one measurement so far. Before cold-read existed, an agent read that
 older wfactory README top to bottom, keeping a list by hand of what the text
 had told the reader. That **hand pass** found 14 problems, which were then
-fixed. `eval/wfactory/` holds the README as it was and the 14 problems, and
+fixed: terms such as "the tracker" that were never explained, a "That part"
+that could mean two things, a promise of usage limits that nothing delivered.
+`eval/wfactory/` holds the README as it was and the 14 problems, and
 `just eval` scores cold-read's flags against them.
 
-| Blind reader | Caught, of 14 | Other flags |
-|---|---|---|
-| Haiku | 7 | 10 |
-| Sonnet | 9 | 13 |
+| Blind reader | Caught, of 14 | Other flags | Cost |
+|---|---|---|---|
+| Haiku, one reading | 7, then 6 | 10 | $0.05 |
+| Sonnet, one reading | 9, then 7 | 13, then 7 | $0.38 |
+| Haiku, three readings merged | 8 | 13 | $0.13 |
 
-Reading that README chunk by chunk took about 8 seconds a chunk, and cost
-$0.03 on Haiku and $0.30 on Sonnet.
+"7, then 6" is two separate runs of the same setup. The runs used slightly
+different wording in the blind reader's instructions, so read the table as a
+rough picture. Three readings side by side took about 3 minutes.
 
-The other flags are not all noise. By my reading, about half are problems the
+Two things stand out. The same model on the same text catches a different
+half each time. Across all of these readings, 13 of the 14 problems were
+caught at least once. In the merged row, the three readings caught 8 between
+them, and only 3 of those 8 were caught by every one of the three. And
+three Haiku readings did about as well as one Sonnet reading, for a third of
+the cost. So `check` reads the document twice by default, and every flag says
+how many readings raised it.
+
+The flags in the "Other flags" column are not all noise. By my reading, about half are problems the
 hand pass missed ("run records" and "protections" really are never explained)
 and half are the blind reader being wrong.
 
 What it gets wrong:
 
-- **It varies between runs.** The same model on the same text will catch a
-  problem one time and miss it the next. Treat one run as a sample.
-- **It misses a contrast that lost its other half.** "All of these are code"
-  once sat beside rules that were only prompts. The prompts were cut, and the
-  sentence stopped making sense. Neither model flagged it.
+- **It misses things.** One reading finds about half of what a careful person
+  finds. More readings find more, with more wrong flags alongside.
+- **It misses a contrast that lost its other half.** The wfactory README had a
+  list of rules that its code enforces, introduced by "All of these are code".
+  That line was written when the list sat beside a second list, of rules that
+  were only instructions to the agent. The second list was cut, and the line
+  no longer contrasted with anything. No reading flagged it.
 - **It can't tell whether a claim is true**, or whether the text is too long.
   The log records what the reader was told and nothing else.
+- **The plan checks are barely tested.** Checking a text against its plan has
+  been run on one document, this README.
 
 ## How it works
 
@@ -147,10 +171,11 @@ than a first-time reader, and "this term was never explained" becomes a lookup
 in the log, which is something a model with the whole document in view has to
 guess at.
 
-A model writes the log, and code raises the flags. No model decides that
-something is a problem. One more model call looks over the whole log (never
-the text) to notice when a later part answers an earlier question, because a
-reader going forward one chunk at a time is bad at that.
+A model writes the log, and code raises the flags. No model is asked whether
+something is a problem. There is one more model call, which looks over the
+whole log (never the text) for a later part that answers an earlier question,
+because a reader going forward one chunk at a time is bad at noticing that.
+All it can do is take an "open" flag away.
 
 The idea of tracking what the reader holds at each sentence is old. Joseph
 Williams's *Style: Lessons in Clarity and Grace* teaches writers to start a

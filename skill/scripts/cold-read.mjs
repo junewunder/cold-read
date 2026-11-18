@@ -15,6 +15,8 @@
 //   --plan <file>         a plan to check the text against (its Reader: and Knows:
 //                         lines are used unless the options are given)
 //   --model <name>        labelling model (default haiku)
+//   --runs <n>            read the document n times and merge the flags (default 2);
+//                         labels vary between readings, so two catch more than one
 //   --pass-model <name>   model for the two passes over the whole log: settling
 //                         threads and matching plan points (default sonnet)
 //   --state <dir>         where the log, outline, report and cache go
@@ -29,7 +31,7 @@ import { homedir } from "node:os";
 import { parseArgs } from "node:util";
 import { chunk } from "./lib/chunk.mjs";
 import { buildLog, claude } from "./lib/label.mjs";
-import { check } from "./lib/check.mjs";
+import { check, mergeFlags, foldUnplanned } from "./lib/check.mjs";
 import { parsePlan, diffPlan, matchPrompt, splitList, MATCH_SCHEMA } from "./lib/plan.mjs";
 import { settlePrompt, applySettled, SETTLE_SCHEMA } from "./lib/settle.mjs";
 import { outline, report } from "./lib/render.mjs";
@@ -39,7 +41,7 @@ const DEFAULT_READER =
 
 function usage(msg) {
   if (msg) console.error(`cold-read: ${msg}\n`);
-  console.error(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 24).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+  console.error(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 26).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
   process.exit(2);
 }
 
@@ -58,6 +60,7 @@ const { values: opt, positionals } = parseArgs({
     knows: { type: "string" },
     plan: { type: "string" },
     model: { type: "string", default: "haiku" },
+    runs: { type: "string", default: "2" },
     "pass-model": { type: "string", default: "sonnet" },
     state: { type: "string" },
     json: { type: "boolean", default: false },
@@ -84,23 +87,38 @@ const knows = opt.knows ? splitList(opt.knows) : (plan?.knows ?? []);
 const chunks = chunk(readFileSync(doc, "utf8"));
 if (chunks.length === 0) usage(`${docArg} has no text to read`);
 
-const log = await buildLog(chunks, {
-  reader,
-  knows,
-  model: opt.model,
-  cacheDir: opt["no-cache"] ? null : join(state, "cache"),
-  onProgress: ({ chunk: c, cached, total }) =>
-    process.stderr.write(`\r  reading chunk ${c.n}/${total}${cached ? " (cached)" : ""}   `),
-});
-process.stderr.write("\n");
-
+const runs = Math.max(1, Number(opt.runs) || 1);
+const cacheDir = opt["no-cache"] ? null : join(state, "cache");
 const PASS_SYSTEM = "You compare records of what a document does. You never see the document. Answer in the JSON schema only.";
-if (log.threads.some((t) => !t.closedAt)) {
-  const { output, cost } = await claude({ prompt: settlePrompt(log), model: opt["pass-model"], system: PASS_SYSTEM, schema: SETTLE_SCHEMA });
-  applySettled(log, output.threads);
-  log.cost += cost;
+const pass = (prompt, schema) => claude({ prompt, model: opt["pass-model"], system: PASS_SYSTEM, schema });
+let read = 0;
+
+// One reading of the document: build the log, settle its threads, raise its flags.
+async function readOnce(run) {
+  const log = await buildLog(chunks, {
+    reader, knows, model: opt.model, run, cacheDir,
+    onProgress: () => process.stderr.write(`\r  read ${++read}/${chunks.length * runs} chunks   `),
+  });
+  if (log.threads.some((t) => !t.closedAt)) {
+    const { output, cost } = await pass(settlePrompt(log), SETTLE_SCHEMA);
+    applySettled(log, output.threads);
+    log.cost += cost;
+  }
+  let flags = check(log);
+  if (plan && command === "check") {
+    const { output, cost } = await pass(matchPrompt(plan, log), MATCH_SCHEMA);
+    log.cost += cost;
+    flags = [...flags, ...diffPlan(plan, log, Object.fromEntries(output.matches.map((m) => [m.point, m.parts])))];
+  }
+  return { log, flags };
 }
 
+// The readings are independent, so they run side by side.
+const readings = await Promise.all(Array.from({ length: runs }, (_, run) => readOnce(run)));
+process.stderr.write("\n");
+
+// The first reading's log is the one written out and shown as the outline.
+const log = readings[0].log;
 const docName = relative(root, doc);
 const outlinePath = join(state, `${stem}.outline.md`);
 writeFileSync(join(state, `${stem}.log.json`), JSON.stringify(log, null, 2));
@@ -112,24 +130,15 @@ if (command === "outline") {
   process.exit(0);
 }
 
-let flags = check(log);
-if (plan) {
-  const { output, cost } = await claude({
-    prompt: matchPrompt(plan, log),
-    model: opt["pass-model"],
-    system: PASS_SYSTEM,
-    schema: MATCH_SCHEMA,
-  });
-  log.cost += cost;
-  const pointMatch = Object.fromEntries(output.matches.map((m) => [m.point, m.parts]));
-  flags = [...flags, ...diffPlan(plan, log, pointMatch)];
-}
+const flags = foldUnplanned(mergeFlags(readings.map((r) => r.flags)));
+const cost = readings.reduce((sum, r) => sum + r.log.cost, 0);
+const cached = readings.reduce((sum, r) => sum + r.log.cached, 0);
 
-const text = report(flags, log, docName, { plan });
+const text = report(flags, log, docName, { plan, runs, cost, cached });
 const reportPath = join(state, `${stem}.report.md`);
 writeFileSync(reportPath, text);
-writeFileSync(join(state, `${stem}.flags.json`), JSON.stringify(flags, null, 2));
+writeFileSync(join(state, `${stem}.flags.json`), JSON.stringify({ runs, cost, chunks: chunks.length, flags }, null, 2));
 
-process.stdout.write(opt.json ? JSON.stringify(flags, null, 2) + "\n" : text);
+process.stdout.write(opt.json ? JSON.stringify({ runs, cost, chunks: chunks.length, flags }, null, 2) + "\n" : text);
 console.error(`\nreport:  ${reportPath}\noutline: ${outlinePath}`);
 process.exit(flags.some((f) => f.level === "error") ? 1 : 0);

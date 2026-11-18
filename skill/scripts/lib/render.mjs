@@ -39,7 +39,7 @@ const TITLES = {
   extra: "Parts of the text the plan does not have",
 };
 
-export function report(flags, log, docName, { plan = null } = {}) {
+export function report(flags, log, docName, { plan = null, runs = 1, cost = log.cost, cached = log.cached } = {}) {
   const errors = flags.filter((f) => f.level === "error").length;
   const out = [
     `# Cold read: ${docName}`,
@@ -47,16 +47,18 @@ export function report(flags, log, docName, { plan = null } = {}) {
     `${log.entries.length} chunks read as: ${log.reader}`,
     `${flags.length} flags (${errors} errors, ${flags.length - errors} warnings)` +
       (plan ? `, checked against a plan of ${plan.points.length} points` : "") +
-      `. Labelled on ${log.model}; $${log.cost.toFixed(3)} from scratch` +
-      (log.cached ? `, ${log.cached} chunks reused from the cache.` : "."),
+      `. Read ${runs === 1 ? "once" : `${runs} times`} on ${log.model}; $${cost.toFixed(3)} from scratch` +
+      (cached ? `, ${cached} chunk readings reused from the cache.` : "."),
   ];
   for (const kind of Object.keys(TITLES)) {
     const group = flags.filter((f) => f.kind === kind);
     if (!group.length) continue;
     out.push("", `## ${TITLES[kind]} (${group.length})`, "");
-    for (const f of group) {
+    // Flags that every run raised come first: they are the surest.
+    for (const f of [...group].sort((a, b) => (b.seen ?? 1) - (a.seen ?? 1) || a.n - b.n)) {
       const at = f.line ? `line ${f.line}: ` : "";
-      out.push(`- ${at}${f.message}${f.quote ? ` Text: "${f.quote}"` : ""}`);
+      const runs = f.of > 1 ? ` (${f.seen} of ${f.of} readings)` : "";
+      out.push(`- ${at}${f.message}${f.quote ? ` Text: "${f.quote.replace(/\s+/g, " ")}"` : ""}${runs}`);
     }
   }
   if (!flags.length) out.push("", "Nothing flagged.");
