@@ -22,6 +22,10 @@ export function outline(log, docName) {
         out.push(`   - uses: ${k.surface}${unknown ? " ⚠ not explained yet" : ""}`);
       }
     }
+    for (const l of e.links ?? []) {
+      const key = { contrast: "contrasts", reason: "because", example: "example of" }[l.type];
+      out.push(`   - ${key}: ${l.about}${l.stated ? "" : " ⚠ never stated"}`);
+    }
     for (const id of e.opens) out.push(`   - opens: ${log.threads.find((t) => t.id === id).what}`);
     for (const id of e.closes) out.push(`   - closes: ${log.threads.find((t) => t.id === id).what}`);
   }
@@ -34,13 +38,20 @@ const TITLES = {
   dropped: "Plan points the text does not carry out",
   alias: "One thing, several names",
   open: "Raised and never settled",
+  contrast: "A contrast with nothing on the other side",
+  dangling: "Plan links that point at nothing",
+  link: "Planned links the text does not make",
   stumble: "Places the reader cannot follow",
   unplanned: "In the text, not in the plan",
   extra: "Parts of the text the plan does not have",
 };
 
-export function report(flags, log, docName, { plan = null, runs = 1, cost = log.cost, cached = log.cached } = {}) {
+export function report(flags, log, docName, { plan = null, planOnly = false, runs = 1, cost = log.cost, cached = log.cached } = {}) {
   const errors = flags.filter((f) => f.level === "error").length;
+  if (planOnly) {
+    const out = [`# Plan check: ${docName}`, "", `${log.entries.length} points, for: ${log.reader}`, `${flags.length} flags (${errors} errors). Line numbers are lines of the plan.`];
+    return out.concat(groups(flags)).join("\n") + "\n";
+  }
   const out = [
     `# Cold read: ${docName}`,
     "",
@@ -50,6 +61,12 @@ export function report(flags, log, docName, { plan = null, runs = 1, cost = log.
       `. Read ${runs === 1 ? "once" : `${runs} times`} on ${log.model}; $${cost.toFixed(3)} from scratch` +
       (cached ? `, ${cached} chunk readings reused from the cache.` : "."),
   ];
+  out.push(...groups(flags));
+  return out.join("\n") + "\n";
+}
+
+function groups(flags) {
+  const out = [];
   for (const kind of Object.keys(TITLES)) {
     const group = flags.filter((f) => f.kind === kind);
     if (!group.length) continue;
@@ -62,5 +79,5 @@ export function report(flags, log, docName, { plan = null, runs = 1, cost = log.
     }
   }
   if (!flags.length) out.push("", "Nothing flagged.");
-  return out.join("\n") + "\n";
+  return out;
 }

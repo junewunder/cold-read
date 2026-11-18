@@ -77,6 +77,7 @@ three times.
 | alias | one thing called by two names that share no word |
 | open | a promise or a question that no later part settles |
 | stumble | words the reader can't resolve, such as a loose "this" |
+| contrast | wording set against something the reader was never given |
 
 ## Planning a document
 
@@ -90,20 +91,34 @@ that point explains and the terms it relies on:
 Reader: A developer who has never seen this tool.
 Knows: git, Claude Code
 
-## Install
-1. Say how to install it, in one command.
-   - defines: toy factory
-   - uses: unit, check
+## What it enforces
+1. List the rules the code enforces.
+   - defines: check
+   - uses: unit
+   - contrasts: point 2
+   - because: an agent can ignore its prompt
+2. List the rules that are only asked of the agent.
 ```
+
+The last two lines under point 1 are **links**: they say the point only works
+because of something else. `contrasts:` names the other side of a contrast,
+`because:` says the point has to give its reason, and `example of:` says it
+has to give an example.
+
+A plan can be checked before any text exists. `cold-read plan plan.md` reads
+the plan as if it were a log, with no model and in under a second. It flags a
+term that a point relies on before any point explains it, and a contrast whose
+other side is not in the plan. Delete point 2 above and point 1 is flagged.
 
 The agent writes the plan and stops. You read and edit the plan instead of the
 prose, since a wrong point costs one line to fix there and a rewrite later.
-Then the agent writes the text, and `check --plan plan.md` adds four flags:
+Then the agent writes the text, and `check --plan plan.md` adds five flags:
 
 | Flag | What it found |
 |---|---|
 | missing | a term the plan explains that the text never explains |
 | dropped | a point that no part of the text carries out |
+| link | a contrast, reason or example the plan asks for that the text lacks |
 | unplanned | a term in the text that the plan doesn't have |
 | extra | a part of the text that serves no point |
 
@@ -129,33 +144,42 @@ that could mean two things, a promise of usage limits that nothing delivered.
 |---|---|---|---|
 | Haiku, one reading | 7, then 6 | 10 | $0.05 |
 | Sonnet, one reading | 9, then 7 | 13, then 7 | $0.38 |
-| Haiku, three readings merged | 8 | 13 | $0.13 |
+| Opus, one reading | 4 | 6 | $0.81 |
+| Haiku, three readings merged | 8, then 8 | 13 | $0.13, then $0.15 |
 
 "7, then 6" is two separate runs of the same setup. The runs used slightly
 different wording in the blind reader's instructions, so read the table as a
 rough picture. Three readings side by side took about 3 minutes.
 
-Two things stand out. The same model on the same text catches a different
-half each time. Across all of these readings, 13 of the 14 problems were
-caught at least once. In the merged row, the three readings caught 8 between
-them, and only 3 of those 8 were caught by every one of the three. And
-three Haiku readings did about as well as one Sonnet reading, for a third of
-the cost. So `check` reads the document twice by default, and every flag says
-how many readings raised it.
+Three things stand out.
 
-The flags in the "Other flags" column are not all noise. By my reading, about half are problems the
-hand pass missed ("run records" and "protections" really are never explained)
-and half are the blind reader being wrong.
+The same model on the same text catches a different half each time. Every one
+of the 14 problems was caught by at least one reading. But in the last merged
+run, the three readings caught 8 between them, and only 2 of those 8 were
+caught by every one of the three.
+
+A stronger model is a worse blind reader. Opus caught the fewest. The job is
+to not know things, and a stronger model understands a term the reader was
+never given and lets it pass.
+
+More readings beat a better model. Three Haiku readings did about as well as
+one Sonnet reading for less than half the cost. So `check` reads the document
+twice by default, and every flag says how many readings raised it.
+
+The flags in the "Other flags" column are not all noise. By my reading, about
+half are problems the hand pass missed ("run records" and "protections" really
+are never explained) and half are the blind reader being wrong.
 
 What it gets wrong:
 
 - **It misses things.** One reading finds about half of what a careful person
   finds. More readings find more, with more wrong flags alongside.
-- **It misses a contrast that lost its other half.** The wfactory README had a
-  list of rules that its code enforces, introduced by "All of these are code".
-  That line was written when the list sat beside a second list, of rules that
-  were only instructions to the agent. The second list was cut, and the line
-  no longer contrasted with anything. No reading flagged it.
+- **It rarely catches a contrast that lost its other half.** The wfactory
+  README had a list of rules that its code enforces, introduced by "All of
+  these are code". That line was written when the list sat beside a second
+  list, of rules that were only instructions to the agent. The second list was
+  cut, and the line no longer contrasted with anything. One reading in three
+  flagged it, and none did before the log recorded contrasts.
 - **It can't tell whether a claim is true**, or whether the text is too long.
   The log records what the reader was told and nothing else.
 - **The plan checks are barely tested.** Checking a text against its plan has

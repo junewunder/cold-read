@@ -72,12 +72,20 @@ export function check(log) {
     for (const s of e.stumbles) {
       flags.push({ kind: "stumble", level: "warn", n: e.n, line: e.start, quote: s.quote, message: s.why });
     }
+    for (const l of e.links ?? []) {
+      if (l.type !== "contrast" || l.stated) continue;
+      flags.push({
+        kind: "contrast", level: "warn", n: e.n, line: e.start, quote: l.quote,
+        message: `Sets itself against "${l.about}", which the reader was never given.`,
+      });
+    }
   }
 
   return flags.sort((a, b) => a.n - b.n || a.kind.localeCompare(b.kind));
 }
 
-const contained = (a, b) => {
+/** One name's content words are all in the other's: "tracker" and "the tracker file". */
+export const contained = (a, b) => {
   const A = wordsOf(a), B = wordsOf(b);
   return A.length > 0 && B.length > 0 && (A.every((w) => B.includes(w)) || B.every((w) => A.includes(w)));
 };
@@ -91,7 +99,7 @@ const overlap = (a, b) => {
 export function sameFlag(a, b) {
   if (a.kind !== b.kind) return false;
   if (a.term && b.term) return contained(a.term, b.term);
-  if (a.kind === "dropped") return a.message === b.message;
+  if (["dropped", "link", "dangling"].includes(a.kind)) return a.message === b.message;
   if (a.n !== b.n) return false;
   if (a.quote && b.quote) return contained(a.quote, b.quote) || overlap(a.quote, b.quote) >= 0.5;
   return true;

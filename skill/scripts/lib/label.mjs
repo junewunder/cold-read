@@ -9,7 +9,7 @@ import { mkdirSync, readFileSync, writeFileSync, existsSync } from "node:fs";
 import { join } from "node:path";
 import { newLog, applyEvents, kebab } from "./log.mjs";
 
-export const PROMPT_VERSION = 7;
+export const PROMPT_VERSION = 8;
 
 const SYSTEM = `You read a document on behalf of one specific reader, one chunk at a time, in order. You record what each chunk does to that reader's knowledge. Your records become a log that is checked by a program, so follow the definitions below exactly.
 
@@ -30,12 +30,18 @@ opens: a thing this chunk makes the reader expect or wonder about and does not i
 
 closes: ids of open threads in the log that this chunk settles.
 
-stumbles: places where this reader cannot tell what is meant: "this", "that" or "it" with no clear referent; a contrast with something the document never stated; a statement that disagrees with the log. Give "quote" (the exact words) and "why" (one sentence). Most chunks have none. A concept the reader does not know is NOT a stumble; it is a "uses" concept.`;
+links: ties between this chunk and something else. Three types:
+- "contrast": the wording sets this against something else. Words like "unlike", "instead", "rather than" or "only" do it, and so does stress that implies an opposite: "all of these are code" implies that some other things are not code. "about" is the other side, in a few words. "stated" is true only if that other side is in this chunk, in the text just before, or in the log. If the wording implies an other side the reader was never given, "stated" is false.
+- "reason": the chunk says why something is so, or why it matters. "about" is the thing it gives the reason for. "stated" is true.
+- "example": the chunk gives a concrete example of a concept or a claim. "about" is the concept id or the claim. "stated" is true.
+Give "quote", the words that make the link. Most chunks have no links.
+
+stumbles: places where this reader cannot tell what is meant: "this", "that" or "it" with no clear referent; a statement that disagrees with the log. Give "quote" (the exact words) and "why" (one sentence). Most chunks have none. A concept the reader does not know is NOT a stumble; it is a "uses" concept.`;
 
 const SCHEMA = {
   type: "object",
   additionalProperties: false,
-  required: ["purpose", "concepts", "opens", "closes", "stumbles"],
+  required: ["purpose", "concepts", "opens", "closes", "links", "stumbles"],
   properties: {
     purpose: { type: "string" },
     concepts: {
@@ -62,6 +68,20 @@ const SCHEMA = {
       },
     },
     closes: { type: "array", items: { type: "string" } },
+    links: {
+      type: "array",
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["type", "about", "stated", "quote"],
+        properties: {
+          type: { type: "string", enum: ["contrast", "reason", "example"] },
+          about: { type: "string" },
+          stated: { type: "boolean" },
+          quote: { type: "string" },
+        },
+      },
+    },
     stumbles: {
       type: "array",
       items: {
@@ -74,10 +94,13 @@ const SCHEMA = {
   },
 };
 
-/** The log as the labeller sees it: concepts and open threads, no document text. */
+/** The log as the labeller sees it: what each part did, the concepts and the open threads. No document text. */
 export function describeLog(log) {
   const concepts = Object.values(log.concepts);
-  const lines = ["Concepts so far:"];
+  const lines = ["Parts so far:"];
+  if (log.entries.length === 0) lines.push("(none)");
+  for (const e of log.entries) lines.push(`${e.n}. ${e.purpose}`);
+  lines.push("", "Concepts so far:");
   if (concepts.length === 0) lines.push("(none)");
   for (const c of concepts) {
     const names = c.surfaces.length ? ` (written as: ${c.surfaces.map((s) => `"${s}"`).join(", ")})` : "";

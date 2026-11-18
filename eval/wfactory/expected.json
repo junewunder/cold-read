@@ -8,7 +8,7 @@
     { "id": "that-part", "what": "\"That part\" could be the setup conversation or the program underneath", "match": "That part", "kinds": ["stumble"] },
     { "id": "git-remote", "what": "\"With a git remote\" raises a question nothing answers", "match": "git remote", "kinds": ["open", "stumble"] },
     { "id": "one-place", "what": "\"collect in one place\" does not say where", "match": "one place|where.*question", "kinds": ["open", "stumble"] },
-    { "id": "all-code", "what": "\"All of these are code\" contrasts with prompt-only rules the text no longer mentions", "match": "are code", "kinds": ["open", "stumble"] },
+    { "id": "all-code", "what": "\"All of these are code\" contrasts with prompt-only rules the text no longer mentions", "match": "are code", "kinds": ["open", "stumble", "contrast"] },
     { "id": "reviewer-names", "what": "\"reviewer agent\" and \"fresh read-only session\" are two names for one thing", "match": "reviewer agent", "kinds": ["alias", "undefined"] },
     { "id": "done-disagrees", "what": "the enforcement list and step 3 disagree about what decides \"done\"", "match": "done", "kinds": ["stumble"] },
     { "id": "shared-code", "what": "\"shared code\" is stated without saying what it is or why it matters", "match": "shared code", "kinds": ["undefined", "open", "stumble"] },

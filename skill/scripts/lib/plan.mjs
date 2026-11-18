@@ -13,10 +13,18 @@
 //      - uses: skill, unit
 //      - opens: what the questions are
 //      - closes: where questions collect
+//      - contrasts: point 4
+//      - because: a bad unit would otherwise be built on
+//      - example of: unit
+//
+// The last three are links: ties from this point to something else. A contrast
+// needs its other side to exist, so "contrasts:" names another point or a term.
 
-import { norm, sameName } from "./check.mjs";
+import { norm, contained, check } from "./check.mjs";
+import { newLog, applyEvents, kebab } from "./log.mjs";
 
 const KEYS = ["defines", "uses", "opens", "closes"];
+const LINK_KEYS = { contrasts: "contrast", because: "reason", "example of": "example" };
 
 export const splitList = (s) => String(s).split(",").map((t) => t.trim()).filter(Boolean);
 
@@ -24,17 +32,23 @@ export function parsePlan(text) {
   const plan = { title: "", reader: "", knows: [], points: [] };
   let section = "", point = null, inReader = false;
 
+  let lineNo = 0;
   for (const raw of text.replace(/\r\n/g, "\n").split("\n")) {
     const line = raw.trimEnd();
+    lineNo++;
     let m;
     if ((m = line.match(/^#\s+(?:Plan|Outline):?\s*(.*)$/i))) { plan.title = m[1]; inReader = false; continue; }
     if ((m = line.match(/^#{2,6}\s+(.*)$/))) { section = m[1].trim(); point = null; inReader = false; continue; }
     if ((m = line.match(/^Reader:\s*(.*)$/i))) { plan.reader = m[1].trim(); inReader = true; continue; }
     if ((m = line.match(/^Knows:\s*(.*)$/i))) { plan.knows = splitList(m[1]); inReader = false; continue; }
     if ((m = line.match(/^\d+[.)]\s+(.*)$/))) {
-      point = { n: plan.points.length + 1, section, text: m[1].replace(/\s*\(lines? [\d–-]+\)\s*$/, "").trim(), defines: [], uses: [], opens: [], closes: [] };
+      point = { n: plan.points.length + 1, section, line: lineNo, text: m[1].replace(/\s*\(lines? [\d–-]+\)\s*$/, "").trim(), defines: [], uses: [], opens: [], closes: [], links: [] };
       plan.points.push(point);
       inReader = false;
+      continue;
+    }
+    if (point && (m = line.match(/^\s+[-*]\s+([\w ]+?):\s*(.*)$/)) && LINK_KEYS[m[1].toLowerCase()]) {
+      point.links.push({ type: LINK_KEYS[m[1].toLowerCase()], about: m[2].replace(/\s*⚠.*$/, "").trim() });
       continue;
     }
     if (point && (m = line.match(/^\s+[-*]\s+(\w+):\s*(.*)$/)) && KEYS.includes(m[1].toLowerCase())) {
@@ -53,7 +67,59 @@ export function parsePlan(text) {
 }
 
 const conceptNames = (c) => [c.id.replace(/-/g, " "), ...c.surfaces];
-const matches = (term, c) => conceptNames(c).some((name) => norm(name) === norm(term) || sameName(name, term));
+const matches = (term, c) => conceptNames(c).some((name) => norm(name) === norm(term) || contained(name, term));
+
+/**
+ * The plan is itself a log: each point is an entry that explains terms, relies
+ * on terms, and opens and closes threads. So the checks that run on a text's
+ * log run on the plan too, before a word of the text exists.
+ */
+export function planAsLog(plan) {
+  const log = newLog({ reader: plan.reader, knows: plan.knows, model: "plan" });
+  const term = (t, event) => ({ id: kebab(norm(t)), surface: t, event, gloss: "" });
+  for (const p of plan.points) {
+    const closes = p.closes
+      .map((what) => log.threads.find((t) => !t.closedAt && (norm(t.what) === norm(what) || contained(t.what, what)))?.id)
+      .filter(Boolean);
+    applyEvents(log, { n: p.n, section: p.section, kind: "point", start: p.line, end: p.line }, {
+      purpose: p.text,
+      concepts: [...p.defines.map((t) => term(t, "defines")), ...p.uses.map((t) => term(t, "uses"))],
+      opens: p.opens.map((what) => ({ what, quote: what })),
+      closes,
+      links: p.links.map((l) => ({ ...l, stated: true, quote: "" })),
+      stumbles: [],
+    });
+  }
+  return log;
+}
+
+/** Check a plan on its own. Line numbers in the flags are lines of the plan file. */
+export function checkPlan(plan) {
+  const log = planAsLog(plan);
+  const flags = check(log);
+  const terms = [...plan.knows, ...plan.points.flatMap((p) => [...p.defines, ...p.uses])];
+
+  for (const p of plan.points) {
+    for (const what of p.closes) {
+      const opened = plan.points.some((q) => q.n < p.n && q.opens.some((o) => norm(o) === norm(what) || contained(o, what)));
+      if (!opened) {
+        flags.push({ kind: "dangling", level: "error", n: p.n, line: p.line, message: `Point ${p.n} closes "${what}", which no earlier point opens.` });
+      }
+    }
+    for (const l of p.links) {
+      if (l.type !== "contrast") continue;
+      const ref = l.about.match(/^point (\d+)$/i);
+      const found = ref ? plan.points.some((q) => q.n === Number(ref[1]) && q.n !== p.n) : terms.some((t) => norm(t) === norm(l.about) || contained(t, l.about));
+      if (!found) {
+        flags.push({
+          kind: "dangling", level: "error", n: p.n, line: p.line,
+          message: `Point ${p.n} contrasts with "${l.about}", which is not a point or a term in the plan.`,
+        });
+      }
+    }
+  }
+  return { log, flags: flags.sort((a, b) => a.n - b.n || a.kind.localeCompare(b.kind)) };
+}
 
 /**
  * Compare a plan with the log of the text written from it.
@@ -98,6 +164,17 @@ export function diffPlan(plan, log, pointMatch = null) {
         flags.push({
           kind: "dropped", level: "error", n: 0, line: 0,
           message: `Plan point ${p.n} (${p.section || "top"}: "${p.text}") is not carried out anywhere in the text.`,
+        });
+        continue;
+      }
+      // A link the plan asks for must show up in the text that carries the point out.
+      const made = log.entries.filter((e) => chunks.includes(e.n)).flatMap((e) => e.links ?? []);
+      for (const l of p.links ?? []) {
+        if (made.some((m) => m.type === l.type && (l.type !== "contrast" || m.stated))) continue;
+        const want = { contrast: `contrasts with "${l.about}"`, reason: `gives a reason ("${l.about}")`, example: `gives an example of "${l.about}"` }[l.type];
+        flags.push({
+          kind: "link", level: "error", n: chunks[0], line: log.entries.find((e) => e.n === chunks[0]).start,
+          message: `Plan point ${p.n} ${want}; the text for it does not.`,
         });
       }
     }

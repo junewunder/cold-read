@@ -129,3 +129,17 @@ test("an unexplained term that is also outside the plan is reported once", () =>
   assert.deepEqual(flags.map((f) => f.kind), ["undefined", "unplanned"]);
   assert.match(flags[0].message, /never explained\. It is not in the plan\.$/);
 });
+
+test("a contrast whose other side the reader never got is flagged; a stated one is not", () => {
+  const log = newLog({ reader: "r", model: "m" });
+  applyEvents(log, c(1), ev({ links: [
+    { type: "contrast", about: "rules that are only prompts", stated: false, quote: "All of these are code" },
+    { type: "contrast", about: "a proof", stated: true, quote: "rather than a proof" },
+    { type: "example", about: "unit", stated: true, quote: "each function" },
+  ] }));
+  const flags = check(log);
+  assert.equal(flags.length, 1);
+  assert.equal(flags[0].kind, "contrast");
+  assert.match(flags[0].message, /rules that are only prompts/);
+  assert.match(describeLog(log), /Parts so far:\n1\. says something/);
+});

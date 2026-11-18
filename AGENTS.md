@@ -22,7 +22,7 @@ for whoever changes it.
   - `scripts/cold-read.mjs`: the CLI. `scripts/lib/` holds one module per
     stage: `chunk` (markdown to chunks), `label` (the blind reader), `log`
     (folding events into the log), `settle` (the whole-log pass that closes
-    threads), `check` (the flags), `plan` (the plan format and its diff),
+    threads), `check` (the flags), `plan` (the plan format, its own check, and its diff),
     `render` (outline and report).
 - `test/`: `node --test`, no dependencies.
 - `eval/<case>/`: a document as it was before someone fixed it by hand, and

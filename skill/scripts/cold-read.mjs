@@ -4,10 +4,12 @@
 //
 //   cold-read check <doc.md> [--reader "who is reading"] [--plan plan.md]
 //   cold-read outline <doc.md> [--reader "..."]
+//   cold-read plan <plan.md>
 //
 // check   builds the log, runs the checks, prints the report. Exit 1 if any
 //         flag is an error, so it can gate a commit.
 // outline builds the log and prints it as an outline in the plan format.
+// plan    checks a plan on its own, before any text exists. No model calls.
 //
 // Options:
 //   --reader <text>       who is reading and what they have never seen
@@ -32,7 +34,7 @@ import { parseArgs } from "node:util";
 import { chunk } from "./lib/chunk.mjs";
 import { buildLog, claude } from "./lib/label.mjs";
 import { check, mergeFlags, foldUnplanned } from "./lib/check.mjs";
-import { parsePlan, diffPlan, matchPrompt, splitList, MATCH_SCHEMA } from "./lib/plan.mjs";
+import { parsePlan, checkPlan, diffPlan, matchPrompt, splitList, MATCH_SCHEMA } from "./lib/plan.mjs";
 import { settlePrompt, applySettled, SETTLE_SCHEMA } from "./lib/settle.mjs";
 import { outline, report } from "./lib/render.mjs";
 
@@ -41,7 +43,7 @@ const DEFAULT_READER =
 
 function usage(msg) {
   if (msg) console.error(`cold-read: ${msg}\n`);
-  console.error(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 26).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+  console.error(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 28).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
   process.exit(2);
 }
 
@@ -71,8 +73,18 @@ const { values: opt, positionals } = parseArgs({
 
 const [command, docArg] = positionals;
 if (opt.help || !command) usage();
-if (!["check", "outline"].includes(command)) usage(`unknown command "${command}"`);
+if (!["check", "outline", "plan"].includes(command)) usage(`unknown command "${command}"`);
 if (!docArg) usage("which document?");
+
+if (command === "plan") {
+  const p = parsePlan(readFileSync(resolve(docArg), "utf8"));
+  if (p.points.length === 0) usage(`${docArg} has no numbered points`);
+  const { log, flags } = checkPlan(p);
+  log.reader = p.reader || "(the plan names no reader)";
+  const text = report(flags, log, docArg, { planOnly: true });
+  process.stdout.write(opt.json ? JSON.stringify({ flags }, null, 2) + "\n" : text);
+  process.exit(flags.some((f) => f.level === "error") ? 1 : 0);
+}
 
 const doc = resolve(docArg);
 const root = projectRoot(doc);

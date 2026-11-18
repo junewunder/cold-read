@@ -14,6 +14,7 @@ export function applyEvents(log, c, events) {
     n: c.n, section: c.section, kind: c.kind, start: c.start, end: c.end,
     purpose: events.purpose.trim(),
     concepts: [], opens: [], closes: [], stumbles: events.stumbles ?? [],
+    links: (events.links ?? []).map((l) => ({ type: l.type, about: l.about.trim(), stated: l.stated !== false, quote: (l.quote ?? "").trim() })),
   };
 
   for (const k of events.concepts ?? []) {

@@ -15,6 +15,7 @@ later, and records what each chunk tells the reader. Those records are the
 ```sh
 node <skill-dir>/scripts/cold-read.mjs check <doc.md> --reader "<who>" --knows "<a, b, c>" [--plan <plan.md>]
 node <skill-dir>/scripts/cold-read.mjs outline <doc.md> --reader "<who>" --knows "<a, b, c>"
+node <skill-dir>/scripts/cold-read.mjs plan <plan.md>
 ```
 
 `<skill-dir>` is the folder this file is in. The reader's labels vary from one
@@ -62,24 +63,35 @@ Tell june what you fixed, what you left and why, and the cost.
 
 ## 2B. No text yet, or a rewrite: plan first
 
-1. **Write the plan** to `<state dir>/<doc>.plan.md`, in the format below: the
-   reader, then each point the document makes, in order, with the terms that
-   point explains and relies on. The plan is the document's vocabulary: a term
-   that is not in `Knows:` or under some `defines:` does not belong in the text.
-2. **Show june the plan and stop.** Print it in full and link the file. june
+1. **Write the plan yourself** to `<state dir>/<doc>.plan.md`, in the format
+   below: the reader, then each point the document makes, in order, with the
+   terms that point explains and relies on, and its links to other points. The
+   plan is where the judgment goes, so it is written by the strongest model in
+   the session and never handed to a cheaper subagent. The plan is also the
+   document's vocabulary: a term that is not in `Knows:` or under some
+   `defines:` does not belong in the text.
+2. **Run `plan <plan.md>`.** It checks the plan as if it were a log, with no
+   model and in under a second: a term a point relies on before any point
+   explains it, a thread opened and never closed, a contrast whose other side
+   is not in the plan. Done when it flags nothing.
+3. **Show june the plan and stop.** Print it in full and link the file. june
    reads and edits the plan instead of the prose, because a wrong point costs
-   one line to fix here and a rewrite later. Done when june says to go.
-3. **Write the text from the plan**, one point at a time, in the plan's order.
-4. **Run `check --plan <plan>`** and sort the flags as in 2A. When the text is
+   one line to fix here and a rewrite later. Rerun step 2 after june's edits.
+   Done when june says to go.
+4. **Write the text from the plan**, one point at a time, in the plan's order.
+5. **Run `check --plan <plan>`** and sort the flags as in 2A. When the text is
    right and the plan is what's stale, change the plan and tell june which
-   points moved.
+   points moved. Done when a round turns up no new real flag.
+6. **Then, and only then, reviewers.** The `readme` skill's reviewer loop reads
+   for truth, fit and tone, and costs ten times a cold read, so it starts on a
+   text whose flags are already settled.
 
 ## 2C. june wants to see what a document says: outline it
 
 Run `outline`. It prints the log in the plan format: what each part of the text
 does, what it explains, and what it relies on that the reader was never given.
 Link june the outline file. When june edits it into the document june wants,
-that file is the plan: revise the text to match, then 2B step 4.
+that file is the plan: revise the text to match, then 2B from step 2.
 
 ## The plan format
 
@@ -94,14 +106,24 @@ Knows: git, Claude Code, agent, skill
    - defines: toy factory
    - uses: unit, check
    - opens: what the questions are
-2. List what it needs.
+2. List what the code enforces.
    - closes: what the questions are
+   - contrasts: point 3
+   - because: an agent can ignore its prompt
+   - example of: check
+3. List what is only asked of the agent.
 ```
 
 `##` headings are the document's sections. A numbered line is one point: what
-that stretch of text does for the reader. Under it, `defines:` lists terms the
-point explains, `uses:` terms it relies on, `opens:` something it promises or
-makes the reader wonder, `closes:` a thread it settles. Every key is optional.
+that stretch of text does for the reader. Under it, every key is optional:
+
+- `defines:` terms the point explains; `uses:` terms it relies on.
+- `opens:` something it promises or makes the reader wonder; `closes:` a
+  thread it settles, in the same words.
+- **Links**, for a point that only works because of another part.
+  `contrasts:` names the other side, as `point N` or a term in the plan; cut
+  that side and the plan check fails. `because:` says the point must give its
+  reason. `example of:` says it must give an example of that term or claim.
 
 ## What each flag means
 
@@ -110,11 +132,20 @@ makes the reader wonder, `closes:` a thread it settles. Every key is optional.
 | undefined | error | a term the reader meets before, or without, any explanation |
 | alias | warning | one thing called by two names that share no word |
 | open | warning | a promise or question that no later part settles |
-| stumble | warning | words the reader cannot resolve: a loose "this", a contrast with something never said |
+| stumble | warning | words the reader cannot resolve: a loose "this", a statement that disagrees with an earlier one |
+| contrast | warning | wording set against something the reader was never given |
+| dangling | error | (plan check) a contrast or a `closes:` that points at nothing in the plan |
+| link | error | a contrast, reason or example the plan asks for that the text for that point lacks |
 | missing | error | a term the plan explains that the text never explains |
 | dropped | error | a plan point that no part of the text carries out |
 | unplanned | warning | a term in the text that the plan does not have |
 | extra | warning | a part of the text that serves no plan point |
+
+**Keep the blind reader cheap.** Its job is to not know things. On the one
+measured document a Haiku reading caught 6 or 7 of 14 known problems, Sonnet 7
+to 9, and Opus 4: a stronger model understands a term the reader was never
+given and lets it pass. To catch more, add readings (`--runs 3`), and leave
+`--model` alone.
 
 With more than one reading, each flag says how many readings raised it. One
 raised by every reading is the surest; one raised by a single reading is still

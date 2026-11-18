@@ -71,3 +71,54 @@ test("an extracted outline parses back as a plan", () => {
   assert.deepEqual(plan.points[0].uses, ["units"]);
   assert.equal(plan.points[0].text, "Says what the tool is.");
 });
+
+const LINKED = `# Plan: README.md
+
+Reader: someone new
+Knows: git
+
+## Rules
+1. Walk through a run.
+   - uses: lane
+   - opens: where questions go
+2. Say what a lane is.
+   - defines: lane
+   - example of: lane
+3. List the rules the code enforces.
+   - contrasts: prompt-only rules
+   - because: an agent can ignore a prompt
+   - closes: what happens on failure
+4. Say where questions go.
+   - contrasts: point 3
+   - closes: where questions go
+`;
+
+test("links parse, and a plan is checked like a log before any text exists", async () => {
+  const { parsePlan, checkPlan } = await import("../skill/scripts/lib/plan.mjs");
+  const plan = parsePlan(LINKED);
+  assert.deepEqual(plan.points[2].links, [
+    { type: "contrast", about: "prompt-only rules" },
+    { type: "reason", about: "an agent can ignore a prompt" },
+  ]);
+  assert.deepEqual(plan.points[1].links, [{ type: "example", about: "lane" }]);
+
+  const { flags } = checkPlan(plan);
+  assert.deepEqual(flags.map((f) => [f.kind, f.line]), [
+    ["undefined", 7],   // point 1 uses "lane" before point 2 defines it
+    ["dangling", 13],   // point 3 contrasts with a term no point has
+    ["dangling", 13],   // point 3 closes a thread nobody opened
+  ]);
+  assert.match(flags[0].message, /"lane" is used at line 7 but only explained later, at line 10/);
+  assert.match(flags[1].message, /closes "what happens on failure"|contrasts with "prompt-only rules"/);
+});
+
+test("a link the plan asks for must appear in the text for that point", () => {
+  const plan = parsePlan(LINKED);
+  const log = newLog({ reader: "someone new", model: "m" });
+  const at = (n) => ({ n, section: "Rules", kind: "para", start: n * 10, end: n * 10 });
+  const base = { concepts: [], opens: [], closes: [], stumbles: [] };
+  applyEvents(log, at(1), { ...base, purpose: "lists the enforced rules", links: [{ type: "reason", about: "prompts", stated: true, quote: "because" }] });
+  applyEvents(log, at(2), { ...base, purpose: "says what a lane is", links: [] });
+  const flags = diffPlan(plan, log, { 1: [1], 2: [2], 3: [1], 4: [1] }).filter((f) => f.kind === "link");
+  assert.deepEqual(flags.map((f) => f.message.match(/point (\d) (\w+)/).slice(1)), [["2", "gives"], ["3", "contrasts"], ["4", "contrasts"]]);
+});

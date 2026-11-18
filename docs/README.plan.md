@@ -30,30 +30,36 @@ Knows: Claude Code, claude -p, agent, skill, README, git, markdown, node, just, 
 
 ## Planning a document
 
-10. Say what a plan is and show one.
-   - defines: plan, point
-11. Say how the plan is used: a person edits the plan before the text exists, and the finished text is checked against it.
+10. Say what a plan is and show one, with its links.
+   - defines: plan, point, link
+   - example of: plan
+11. Say that a plan can be checked on its own, before any text exists.
+   - uses: plan, log, point
+12. Say how the plan is used: a person edits the plan before the text exists, and the finished text is checked against it.
    - uses: plan, flag
-12. Say that an outline is the same format, read off a text that already exists, and that this README was written from a plan.
+13. Say that an outline is the same format, read off a text that already exists, and that this README was written from a plan.
    - defines: outline
    - uses: log, plan
 
 ## How well it works
 
-13. Say what it was measured against: problems found by hand in one older README.
+14. Say what it was measured against: problems found by hand in one older README.
    - defines: hand pass
-14. Give the measured result: how many of those problems it catches, how many other flags it raises, the time and the cost, and what the numbers say about reading more than once.
+15. Give the measured result: how many of those problems it catches, how many other flags it raises, the time and the cost.
    - uses: flag, blind reader
-15. Say what it gets wrong and what it cannot see: it varies between readings, some problems are outside the log, and the plan checks are barely tested.
+16. Say what the numbers show: readings differ, a stronger model reads worse, and more readings beat a better model.
+   - because: the blind reader's job is to not know things
+   - uses: flag, blind reader
+17. Say what it gets wrong and what it cannot see: it varies between readings, some problems are outside the log, and the plan checks are barely tested.
    - uses: flag, log
 
 ## How it works
 
-16. State the two rules the design rests on.
+18. State the two rules the design rests on.
    - uses: blind reader, log, flag, chunk
-17. Name the ideas it borrows from.
+19. Name the ideas it borrows from.
    - defines: Style: Lessons in Clarity and Grace, ScholarPhi
 
 ## About
 
-18. Say who made it, that Claude wrote the README from this plan, and the license.
+20. Say who made it, that Claude wrote the README from this plan, and the license.
