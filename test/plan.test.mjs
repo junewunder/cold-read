@@ -123,3 +123,68 @@ test("a link the plan asks for must appear in the text for that point", () => {
   const flags = diffPlan(plan, log, { 1: [1], 2: [2], 3: [1], 4: [1] }).filter((f) => f.kind === "link");
   assert.deepEqual(flags.map((f) => f.message.match(/point (\d) (\w+)/).slice(1)), [["2", "gives"], ["3", "contrasts"], ["4", "contrasts"]]);
 });
+
+const MANNER_PLAN = `# Outline: paper.md
+
+Reader: a first-year student.
+Length: 40 lines
+
+## Background
+1. Say what a unit is.
+   - defines: unit (paragraph, by example), f(x)
+2. Say what a lane does.
+   - defines: lane (sentence, builds on unit)
+`;
+
+const def = (id, how, extra = {}) => ({ id, surface: id, event: "defines", gloss: "g", how, example: false, builds_on: [], ...extra });
+const use = (id) => ({ id, surface: id, event: "uses", gloss: "" });
+
+test("the way a term is introduced parses out of the brackets after it", () => {
+  const plan = parsePlan(MANNER_PLAN);
+  assert.deepEqual(plan.points[0].defines, ["unit", "f(x)"]);
+  assert.deepEqual(plan.points[0].manners, [{ term: "unit", how: "paragraph", example: true, on: [] }]);
+  assert.deepEqual(plan.points[1].manners, [{ term: "lane", how: "sentence", example: false, on: ["unit"] }]);
+});
+
+test("a term a definition builds on must be explained by then", async () => {
+  const { checkPlan } = await import("../skill/scripts/lib/plan.mjs");
+  const flags = checkPlan(parsePlan(MANNER_PLAN.replace("builds on unit", "builds on tracker"))).flags;
+  assert.deepEqual(flags.map((f) => [f.kind, f.term]), [["undefined", "tracker"]]);
+  assert.deepEqual(checkPlan(parsePlan(MANNER_PLAN)).flags, []);
+});
+
+test("a gloss dropped in ahead of the planned explanation is misplaced", () => {
+  const log = newLog({ reader: "r", model: "m" });
+  applyEvents(log, chunkAt(1), ev("opens the paper", [def("unit", "gloss")]));
+  applyEvents(log, chunkAt(2), ev("says what a unit is", [def("unit", "paragraph", { example: true })]));
+  applyEvents(log, chunkAt(3), ev("says what a lane does", [def("lane", "sentence", { builds_on: ["units"] })]));
+  const flags = diffPlan(parsePlan(MANNER_PLAN), log, { 1: [2], 2: [3] }, "f(x)");
+  assert.deepEqual(flags.filter((f) => f.kind !== "extra").map((f) => [f.kind, f.term, f.line]), [["misplaced", "unit", 10]]);
+});
+
+test("an explanation in the right place and the wrong manner is flagged", () => {
+  const log = newLog({ reader: "r", model: "m" });
+  applyEvents(log, chunkAt(1), ev("says what a unit is", [def("unit", "gloss")]));
+  applyEvents(log, chunkAt(2), ev("says what a lane does", [def("lane", "sentence"), use("unit")]));
+  const flags = diffPlan(parsePlan(MANNER_PLAN), log, { 1: [1], 2: [2] }, "f(x)");
+  assert.deepEqual(flags.map((f) => [f.kind, f.term]), [["manner", "unit"], ["manner", "lane"]]);
+  assert.match(flags[0].message, /paragraph of its own \(the text explains it in passing, as a gloss\); with an example/);
+  assert.match(flags[1].message, /building on "unit"/);
+});
+
+test("an outline shows how each term is introduced, and reads back the same", () => {
+  const log = newLog({ reader: "r", model: "m" });
+  applyEvents(log, chunkAt(1), ev("says what a unit is", [def("unit", "paragraph", { example: true, builds_on: ["task"] })]));
+  const text = outline(log, "paper.md");
+  assert.match(text, /- defines: unit \(paragraph, by example, builds on task\) — g/);
+  assert.deepEqual(parsePlan(text).points[0].manners, [{ term: "unit", how: "paragraph", example: true, on: ["task"] }]);
+});
+
+test("a term given to two points may be glossed in one and defined in the other", () => {
+  const plan = parsePlan(MANNER_PLAN.replace("1. Say what a unit is.", "1. Open the paper.\n   - defines: unit (gloss)\n2. Say what a unit is."));
+  const log = newLog({ reader: "r", model: "m" });
+  applyEvents(log, chunkAt(1), ev("opens the paper", [def("unit", "gloss")]));
+  applyEvents(log, chunkAt(2), ev("says what a unit is", [def("unit", "paragraph", { example: true })]));
+  applyEvents(log, chunkAt(3), ev("says what a lane does", [def("lane", "sentence", { builds_on: ["unit"] })]));
+  assert.deepEqual(diffPlan(plan, log, { 1: [1], 2: [2], 3: [3] }, "f(x)"), []);
+});

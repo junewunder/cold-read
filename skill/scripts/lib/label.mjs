@@ -11,7 +11,7 @@ import { newLog, applyEvents, kebab } from "./log.mjs";
 import { norm, wordsOf, akin } from "./check.mjs";
 import { prose } from "./chunk.mjs";
 
-export const PROMPT_VERSION = 9;
+export const PROMPT_VERSION = 10;
 
 const SYSTEM = `You read a document on behalf of one specific reader, one chunk at a time, in order. You record what each chunk does to that reader's knowledge. Your records become a log that is checked by a program, so follow the definitions below exactly.
 
@@ -26,6 +26,9 @@ concepts: each named thing in this chunk that the reader does NOT already know f
 - surface: the name as this chunk writes it: a noun phrase of one to four words ("tracker", not "the tracker that records units"). A clause or a verb phrase ("more are opt-in", "reviews the branch") is not a concept.
 - event: "defines" only if this chunk SAYS what the thing is or does: a definition, an example, a gloss in brackets or after a comma, or a link's own description. "uses" if the chunk relies on the reader knowing it. If you can only guess the meaning from how the sentence uses the word ("a lane claims the next unit from the tracker" does not say what a tracker is), that is "uses".
 - gloss: for "defines", what the reader now knows about it, in at most 20 words, taken from this chunk only. For "uses", an empty string.
+- how: for "defines", the way this chunk explains it. "gloss": in passing, a few words inside a sentence that is about something else (in brackets, after a comma, a link's description). "sentence": one or two sentences whose job is to say what the thing is. "paragraph": most of the chunk is about it, so the chunk is there to explain it. "formal": a definition set off or labelled as one ("Definition 2", "we define X as", a formula that fixes its meaning). For "uses", an empty string.
+- example: true if the explanation shows a concrete instance of the thing. For "uses", false.
+- builds_on: for "defines", the other terms the explanation is stated in terms of, as the chunk writes them ("a lane is a loop that claims units" builds on "unit"). Often empty. For "uses", empty.
 A concept the log marks "used, never explained" stays unknown to the reader until some chunk defines it.
 
 opens: a thing this chunk makes the reader expect or wonder about and does not itself settle: a promise that something exists or comes later, or a question the wording raises and leaves open ("with a git remote" — and without one?). Only things a careful reader would be bothered by if the document never came back to them. A link to another document settles what it points to. An unexplained term is a "uses" concept, not a thread. Most chunks open nothing. Give "what" (the expectation, a few words) and "quote" (the words that raise it).
@@ -51,12 +54,15 @@ const SCHEMA = {
       items: {
         type: "object",
         additionalProperties: false,
-        required: ["id", "surface", "event", "gloss"],
+        required: ["id", "surface", "event", "gloss", "how", "example", "builds_on"],
         properties: {
           id: { type: "string" },
           surface: { type: "string" },
           event: { type: "string", enum: ["defines", "uses"] },
           gloss: { type: "string" },
+          how: { type: "string", enum: ["gloss", "sentence", "paragraph", "formal", ""] },
+          example: { type: "boolean" },
+          builds_on: { type: "array", items: { type: "string" } },
         },
       },
     },

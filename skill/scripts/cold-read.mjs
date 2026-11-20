@@ -2,10 +2,10 @@
 // cold-read: read a document the way a first-time reader does, one chunk at a
 // time, and check what that reader was never told.
 //
-//   cold-read check <doc.md> [--reader "who is reading"] [--plan plan.md]
+//   cold-read check <doc.md> [--reader "who is reading"] [--outline outline.md]
 //   cold-read leave <doc.md> <flag id> "<why>"
 //   cold-read outline <doc.md> [--reader "..."]
-//   cold-read plan <plan.md>
+//   cold-read outline <outline.md>
 //   cold-read style <doc.md>
 //
 // check   builds the log, runs the checks, prints the report. Each run on an
@@ -13,9 +13,11 @@
 //         two or more readings raised is still standing. Exit 1 otherwise.
 // leave   records that a flag from the last round is left as it is, and why.
 //         It is not raised again; the report lists it at the end.
-// outline builds the log and prints it as an outline in the plan format.
-// plan    checks a plan on its own, before any text exists. No model calls.
-//         Exit 1 if any flag is an error.
+// outline given a document, builds the log and prints it as an outline: what
+//         each part does, and where and how each term is explained.
+//         Given an outline (a file that starts "# Outline:"), checks it on its
+//         own, before any text exists. No model calls. Exit 1 if any flag is
+//         an error.
 // style   flags sentence-level habits a pattern can find: figures of speech
 //         standing in for plain verbs, staged points, dashes as connectors.
 //         Needs Vale on the PATH. No model calls. Exit 1 if there is a flag.
@@ -23,17 +25,20 @@
 // Options:
 //   --reader <text>       who is reading and what they have never seen
 //   --knows <a, b, c>     terms this reader already knows; never flagged
-//   --plan <file>         a plan to check the text against (its Reader: and Knows:
-//                         lines are used unless the options are given)
+//   --outline <file>      an outline to check the text against (its Reader: and
+//                         Knows: lines are used unless the options are given)
 //   --model <name>        labelling model (default haiku)
 //   --runs <n>            read the document n times and merge the flags (default 2);
 //                         labels vary between readings, so two catch more than one
 //   --pass-model <name>   model for the two passes over the whole log: settling
-//                         threads and matching plan points (default sonnet)
+//                         threads and matching outline points (default sonnet)
 //   --state <dir>         where the log, outline, report, rounds and cache go
 //                         (default ~/.local/share/cold-read/<project>/)
 //   --json                print flags as JSON instead of the report
 //   --no-cache            relabel every chunk
+//
+// An outline used to be called a plan: "plan <file>", "--plan" and a file that
+// starts "# Plan:" all still work.
 
 import { readFileSync, writeFileSync, mkdirSync } from "node:fs";
 import { execFileSync } from "node:child_process";
@@ -55,7 +60,7 @@ const DEFAULT_READER =
 
 function usage(msg) {
   if (msg) console.error(`cold-read: ${msg}\n`);
-  console.error(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 37).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+  console.error(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 41).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
   process.exit(2);
 }
 
@@ -72,6 +77,7 @@ const { values: opt, positionals } = parseArgs({
   options: {
     reader: { type: "string" },
     knows: { type: "string" },
+    outline: { type: "string" },
     plan: { type: "string" },
     model: { type: "string", default: "haiku" },
     runs: { type: "string", default: "2" },
@@ -101,11 +107,12 @@ if (command === "style") {
   process.exit(flags.length ? 1 : 0);
 }
 
-if (command === "plan") {
+const isOutline = (file) => /^#\s+(Plan|Outline)\b/im.test(readFileSync(resolve(file), "utf8").split("\n").find((l) => l.startsWith("#")) ?? "");
+if (command === "plan" || (command === "outline" && isOutline(docArg))) {
   const p = parsePlan(readFileSync(resolve(docArg), "utf8"));
   if (p.points.length === 0) usage(`${docArg} has no numbered points`);
   const { log, flags } = checkPlan(p);
-  log.reader = p.reader || "(the plan names no reader)";
+  log.reader = p.reader || "(the outline names no reader)";
   const text = report(flags, log, docArg, { planOnly: true });
   process.stdout.write(opt.json ? JSON.stringify({ flags }, null, 2) + "\n" : text);
   process.exit(flags.some((f) => f.level === "error") ? 1 : 0);
@@ -119,7 +126,8 @@ mkdirSync(state, { recursive: true });
 
 const files = {
   log: join(state, `${stem}.log.json`),
-  outline: join(state, `${stem}.outline.md`),
+  // What the text was read as. Its own name, so it never overwrites an outline someone wrote.
+  outline: join(state, `${stem}.as-read.outline.md`),
   report: join(state, `${stem}.report.md`),
   flags: join(state, `${stem}.flags.json`),
   left: join(state, `${stem}.left.json`),
@@ -138,7 +146,8 @@ if (command === "leave") {
   process.exit(0);
 }
 
-const plan = opt.plan ? parsePlan(readFileSync(resolve(opt.plan), "utf8")) : null;
+const planFile = opt.outline ?? opt.plan;
+const plan = planFile ? parsePlan(readFileSync(resolve(planFile), "utf8")) : null;
 const reader = opt.reader ?? (plan?.reader || DEFAULT_READER);
 const knows = opt.knows ? splitList(opt.knows) : (plan?.knows ?? []);
 const mentions = plan ? allMentions(plan) : [];

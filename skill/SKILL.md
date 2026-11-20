@@ -1,6 +1,6 @@
 ---
 name: cold-read
-description: "Check prose the way a first-time reader meets it. A blind reader goes through the document chunk by chunk and logs what each chunk tells them; code then flags terms used before they are explained, one thing under two names, questions raised and never settled, and drift from the plan. Use for 'cold read this', 'does this README assume too much', 'check it for undefined terms', before handing june agent-written prose (a README, a doc, a paper section), and when june wants to see or edit the plan or outline of a document."
+description: "Check prose the way a first-time reader meets it. A blind reader goes through the document chunk by chunk and logs what each chunk tells them; code then flags terms used before they are explained, one thing under two names, questions raised and never settled, and drift from the outline. Use for 'cold read this', 'does this README assume too much', 'check it for undefined terms', before handing june agent-written prose (a README, a doc, a paper section), and when june wants to see or edit the outline of a document: its points, and where and how each term is introduced."
 ---
 
 # Cold read
@@ -13,10 +13,10 @@ later, and records what each chunk tells the reader. Those records are the
 **flag**.
 
 ```sh
-node <skill-dir>/scripts/cold-read.mjs check <doc.md> --reader "<who>" --knows "<a, b, c>" [--plan <plan.md>]
+node <skill-dir>/scripts/cold-read.mjs check <doc.md> --reader "<who>" --knows "<a, b, c>" [--outline <outline.md>]
 node <skill-dir>/scripts/cold-read.mjs leave <doc.md> <flag id> "<why>"
 node <skill-dir>/scripts/cold-read.mjs outline <doc.md> --reader "<who>" --knows "<a, b, c>"
-node <skill-dir>/scripts/cold-read.mjs plan <plan.md>
+node <skill-dir>/scripts/cold-read.mjs outline <outline.md>
 node <skill-dir>/scripts/cold-read.mjs style <doc.md>
 ```
 
@@ -38,7 +38,7 @@ else. Write two things:
   have never seen this project."
 - `--knows`: the terms this reader already has, which will never be flagged.
   "git, Claude Code, agent, skill, test suite". Only terms this reader really
-  has: a name they have never heard goes under `mentions:` in a plan, or is
+  has: a name they have never heard goes under `mentions:` in an outline, or is
   left with a reason.
 
 When june has already named the readers (the `readme` skill does this), use the
@@ -63,8 +63,14 @@ reading the lines it points at:
 
 - **Real**: fix the text. First look for the fix that adds no words: use the
   name the reader already has, move the sentence after the one that explains
-  it, or cut the words that raise the question. Explain the term only when the
-  reader needs it.
+  it, or cut the words that raise the question. When the term does need
+  explaining, the flagged line is only where the reader first missed it.
+  Choose the **introduction**: which part of the document should explain the
+  term, and how (a paragraph of its own, a sentence, a gloss in passing; with
+  an example; building on which earlier term). A term the document is about
+  gets a sentence or a paragraph where its subject comes up; a gloss suits a
+  name the reader needs once. Write the introduction there, reorder so it
+  comes before the first use, and say which you chose when you report.
 - **The reader does know this**: add the term to `--knows`. The text stays.
 - **The blind reader got it wrong, or the text is right as it stands**: run
   `leave <doc> <id> "<why>"` with the id the report prints in brackets. The
@@ -88,33 +94,40 @@ Edit only a document that is yours to edit. Otherwise report the flags.
 
 Tell june what you fixed, what you left and why, and what the rounds cost.
 
-## 2B. No text yet, or a rewrite: plan first
+## 2B. No text yet, or a rewrite: outline first
 
-1. **Write the plan yourself** to `<state dir>/<doc>.plan.md`, in the format
-   below: the reader, the length, then each point the document makes, in
-   order, with the terms that point explains and relies on, and its links to
-   other points. The plan is where the judgment goes, so it is written by the
+1. **Write the outline yourself** to `<state dir>/<doc>.outline.md`, in the
+   format below: the reader, the length, then each point the document makes,
+   in order, with the terms that point explains and relies on, how each term
+   is introduced, and the point's links to other points. The outline is where the judgment goes, so it is written by the
    strongest model in the session and never handed to a cheaper subagent. The
-   plan is also the document's vocabulary: a term that is not in `Knows:`,
+   outline is also the document's vocabulary: a term that is not in `Knows:`,
    under some `defines:` or under some `mentions:` does not belong in the
    text. Take the length from june; if june has given none, propose one with
-   the plan.
-2. **Run `plan <plan.md>`.** It checks the plan as if it were a log, with no
+   the outline.
+2. **Run `outline <outline.md>`.** It checks the outline as if it were a log, with no
    model and in under a second: a term a point relies on before any point
    explains it, a thread opened and never closed, a contrast whose other side
-   is not in the plan, section lengths that add up to more than the document's.
+   is not in the outline, section lengths that add up to more than the document's.
    Done when it flags nothing.
-3. **Show june the plan and stop.** Print it in full and link the file. june
-   reads and edits the plan instead of the prose, because a wrong point costs
+3. **Show june the outline and stop.** Print it in full and link the file. june
+   reads and edits the outline instead of the prose, because a wrong point costs
    one line to fix here and a rewrite later. Rerun step 2 after june's edits.
    Done when june says to go.
-4. **Write the text from the plan**, one point at a time, in the plan's order.
-5. **Run `check --plan <plan>`** in rounds, sorting the flags as in 2A. Two
-   kinds of flag are settled differently here:
-   - **long**: the text is over a length the plan sets. Cut until it fits. The
+4. **Write the text from the outline**, one point at a time, in the outline's order.
+5. **Run `check --outline <outline>`** in rounds, sorting the flags as in 2A.
+   Three kinds of flag are settled differently here:
+   - **misplaced** or **manner**: the text explains a term somewhere other
+     than the point the outline gives it to, or not the way the outline asks.
+     Where and how a term is introduced is june's choice, made in the outline.
+     Rewrite that point's text so the introduction is there, in that manner,
+     and take out the explanation that stands in for it elsewhere. When the
+     outline's choice cannot work (the term is needed before its point), tell
+     june which term and stop.
+   - **long**: the text is over a length the outline sets. Cut until it fits. The
      lengths are june's: when a section cannot say what its points need in the
      room it has, tell june which point is the cause and stop.
-   - **unplanned** or **missing** where the text is right: change the plan's
+   - **unplanned** or **missing** where the text is right: change the outline's
      term lists to match. When a point itself changes, tell june which.
 6. **Then, and only then, reviewers.** The `readme` skill's reviewer loop reads
    for truth, fit and tone, and costs ten times a cold read, so it starts on a
@@ -122,16 +135,18 @@ Tell june what you fixed, what you left and why, and what the rounds cost.
 
 ## 2C. june wants to see what a document says: outline it
 
-Run `outline`. It prints the log in the plan format: what each part of the text
-does, what it explains, what it relies on that the reader was never given, and
-how long each section is. Link june the outline file. When june edits it into
-the document june wants, that file is the plan: revise the text to match, then
-2B from step 2.
+Run `outline <doc.md>`. It prints the log in the outline format: what each part
+of the text does, what it explains and how (`defines: unit (gloss)`), what it
+relies on that the reader was never given, and how long each section is. It
+writes the same to `<doc>.as-read.outline.md` in the state dir, which every
+later run overwrites. Copy that file to `<doc>.outline.md` and link june the
+copy. When june has edited it into the document june wants, revise the text to
+match, then 2B from step 2.
 
-## The plan format
+## The outline format
 
 ```markdown
-# Plan: README.md
+# Outline: README.md
 
 Reader: One developer with a personal project. They have never seen this tool.
 Knows: git, Claude Code, agent, skill
@@ -140,7 +155,7 @@ Length: 120 lines
 ## Install
 Length: 15 lines
 1. Say how to install it, in one command.
-   - defines: toy factory
+   - defines: toy factory (paragraph, by example), lane (gloss, builds on unit)
    - uses: unit, check
    - mentions: Homebrew
    - opens: what the questions are
@@ -156,21 +171,30 @@ Length: 15 lines
 
 `##` headings are the document's sections, spelled as the document spells
 them. A numbered line is one point: what that stretch of text does for the
-reader. Points are numbered through the whole plan, so `point 3` is the third
+reader. Points are numbered through the whole outline, so `point 3` is the third
 numbered line, whatever section it is in.
 
 - `Length:` under the reader is the most the whole document may be; under a
   heading, the most that section may be. `120 lines` or `900 words`. Lines are
   counted as an editor shows them, with blank lines and code.
 - `defines:` terms the point explains; `uses:` terms it relies on.
+- After a term under `defines:`, brackets say how it is introduced. One size:
+  `gloss` (a few words in passing, inside a sentence about something else),
+  `sentence` (a sentence or two whose job is to say what it is), `paragraph`
+  (a paragraph of its own), `formal` (a definition set off or labelled as
+  one, as a paper does). Then any of `by example` and `builds on <term>`
+  (`builds on unit and check` for two). A term with no brackets may be
+  explained in any manner, but still only in its own point. A term glossed
+  early and defined in full later goes under `defines:` in both points,
+  each with its own brackets.
 - `mentions:` names the point brings up and does not explain, which the reader
   is not expected to know: a game's name, a tool in a one-line list. They are
   never flagged. A later point that relies on one needs it under a `defines:`.
 - `opens:` something it promises or makes the reader wonder; `closes:` a
   thread it settles, in the same words.
 - **Links**, for a point that only works because of another part.
-  `contrasts:` names the other side, as `point N` or a term in the plan; cut
-  that side and the plan check fails. `because:` says the point must give its
+  `contrasts:` names the other side, as `point N` or a term in the outline; cut
+  that side and the outline check fails. `because:` says the point must give its
   reason. `example of:` says it must give an example of that term or claim.
 
 ## What each flag means
@@ -182,13 +206,15 @@ numbered line, whatever section it is in.
 | open | warning | a promise or question that no later part settles |
 | stumble | warning | words the reader cannot resolve: a loose "this", a statement that disagrees with an earlier one |
 | contrast | warning | wording set against something the reader was never given |
-| long | error | the document or a section is longer than the plan allows |
-| dangling | error | (plan check) a contrast or a `closes:` that points at nothing in the plan |
-| link | error | a contrast, reason or example the plan asks for that the text for that point lacks |
-| missing | error | a term the plan explains that the text never explains |
-| dropped | error | a plan point that no part of the text carries out |
-| unplanned | warning | a term in the text that the plan does not have |
-| extra | warning | a part of the text that serves no plan point |
+| long | error | the document or a section is longer than the outline allows |
+| dangling | error | (outline check) a contrast or a `closes:` that points at nothing in the outline |
+| link | error | a contrast, reason or example the outline asks for that the text for that point lacks |
+| missing | error | a term the outline explains that the text never explains |
+| dropped | error | an outline point that no part of the text carries out |
+| misplaced | error | a term explained outside the point the outline gives it to, or glossed before that point |
+| manner | error | a term explained in its point, but at another size, or without the example or the earlier term the outline asks for |
+| unplanned | warning | a term in the text that the outline does not have |
+| extra | warning | a part of the text that serves no outline point |
 
 A name that appears only inside a code fence is never flagged. When a
 sentence leans on one, the sentence has to name it.

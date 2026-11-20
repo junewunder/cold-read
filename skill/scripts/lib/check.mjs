@@ -169,7 +169,7 @@ export function foldUnplanned(flags) {
   for (const f of flags) {
     if (f.kind !== "unplanned") { out.push(f); continue; }
     const twin = flags.find((d) => d.kind === "undefined" && contained(d.term, f.term));
-    if (twin) { if (!twin.message.endsWith("plan.")) twin.message += " It is not in the plan."; }
+    if (twin) { if (!twin.message.endsWith("outline.")) twin.message += " It is not in the outline."; }
     else out.push(f);
   }
   return out;

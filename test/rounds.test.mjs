@@ -81,15 +81,15 @@ Length: 2 lines
 3. Name the licence.
 `;
 
-test("text longer than the plan allows is an error, for the document and for a section", () => {
+test("text longer than the outline allows is an error, for the document and for a section", () => {
   const plan = parsePlan(SIZED);
   assert.deepEqual(plan.length, { max: 15, unit: "lines", line: 4 });
   assert.deepEqual(plan.sections.map((s) => [s.name, s.length?.max]), [["Install", 8], ["Use", 5], ["Licence", 2]]);
   const flags = checkLength(plan, measure(DOC));
   assert.deepEqual(flags.map((f) => [f.level, f.line, f.message]), [
-    ["error", 0, "The text is 20 lines; the plan allows 15."],
-    ["error", 5, '"Install" is 12 lines; the plan allows 8.'],
-    ["warn", 0, 'The plan allows "Licence" 2 lines, but the text has no heading "Licence", so its length was not checked.'],
+    ["error", 0, "The text is 20 lines; the outline allows 15."],
+    ["error", 5, '"Install" is 12 lines; the outline allows 8.'],
+    ["warn", 0, 'The outline allows "Licence" 2 lines, but the text has no heading "Licence", so its length was not checked.'],
   ]);
 });
 
@@ -255,9 +255,9 @@ test("a flag left with a reason is not raised again, and a round is quiet when n
 
 test("a length over the plan keeps a round from being quiet without any reading agreeing", () => {
   const dir = mkdtempSync(join(tmpdir(), "cold-read-test-"));
-  const long = { kind: "long", level: "error", n: 0, line: 0, message: "The text is 283 lines; the plan allows 200.", sure: true };
+  const long = { kind: "long", level: "error", n: 0, line: 0, message: "The text is 283 lines; the outline allows 200.", sure: true };
   const round = recordRound(join(dir, "r.json"), { docText: "v1", standing: [long], runs: 3, cost: 0, paid: 0 });
   assert.equal(round.quiet, false);
   assert.ok(sameProblem(long, { ...long }));
-  assert.ok(!sameProblem(long, { ...long, message: "The text is 240 lines; the plan allows 200." }));
+  assert.ok(!sameProblem(long, { ...long, message: "The text is 240 lines; the outline allows 200." }));
 });

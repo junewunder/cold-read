@@ -127,7 +127,7 @@ test("an unexplained term that is also outside the plan is reported once", () =>
     { kind: "unplanned", term: "ScholarPhi", message: "y" },
   ]);
   assert.deepEqual(flags.map((f) => f.kind), ["undefined", "unplanned"]);
-  assert.match(flags[0].message, /never explained\. It is not in the plan\.$/);
+  assert.match(flags[0].message, /never explained\. It is not in the outline\.$/);
 });
 
 test("a contrast whose other side the reader never got is flagged; a stated one is not", () => {

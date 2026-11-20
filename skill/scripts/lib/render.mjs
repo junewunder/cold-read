@@ -1,5 +1,7 @@
 // Turn the log and the flags into things a person reads.
 
+import { mannerText } from "./plan.mjs";
+
 /** The log as an outline, in the plan format (see plan.mjs), so it can be edited into a plan. */
 export function outline(log, docName, { lengths = null } = {}) {
   const out = [`# Outline: ${docName}`, "", `Reader: ${log.reader}`];
@@ -21,7 +23,7 @@ export function outline(log, docName, { lengths = null } = {}) {
     for (const k of e.concepts) {
       const c = log.concepts[k.id];
       if (k.event === "defines") {
-        out.push(`   - defines: ${k.surface}${k.gloss ? ` — ${k.gloss}` : ""}`);
+        out.push(`   - defines: ${k.surface}${mannerText(k)}${k.gloss ? ` — ${k.gloss}` : ""}`);
       } else {
         const unknown = !c.definedAt || c.definedAt > e.n;
         out.push(`   - uses: ${k.surface}${unknown ? " ⚠ not explained yet" : ""}`);
@@ -38,18 +40,20 @@ export function outline(log, docName, { lengths = null } = {}) {
 }
 
 const TITLES = {
-  long: "Longer than the plan allows",
+  long: "Longer than the outline allows",
   undefined: "Used before it is explained",
-  missing: "In the plan, missing from the text",
-  dropped: "Plan points the text does not carry out",
+  missing: "In the outline, missing from the text",
+  dropped: "Outline points the text does not carry out",
+  misplaced: "Explained somewhere other than where the outline puts it",
+  manner: "Explained, but not the way the outline asks",
   alias: "One thing, several names",
   open: "Raised and never settled",
   contrast: "A contrast with nothing on the other side",
-  dangling: "Plan links that point at nothing",
-  link: "Planned links the text does not make",
+  dangling: "Outline links that point at nothing",
+  link: "Links the outline asks for and the text does not make",
   stumble: "Places the reader cannot follow",
-  unplanned: "In the text, not in the plan",
-  extra: "Parts of the text the plan does not have",
+  unplanned: "In the text, not in the outline",
+  extra: "Parts of the text the outline does not have",
 };
 
 const ordinal = (k) => ["first", "second", "third", "fourth", "fifth"][k - 1] ?? `${k}th`;
@@ -75,7 +79,7 @@ function standing(round, runs) {
 export function report(flags, log, docName, { plan = null, planOnly = false, runs = 1, cost = log.cost, paid = cost, cached = log.cached, left = [], round = null, lengths = null } = {}) {
   const errors = flags.filter((f) => f.level === "error").length;
   if (planOnly) {
-    const out = [`# Plan check: ${docName}`, "", `${log.entries.length} points, for: ${log.reader}`, `${flags.length} flags (${errors} errors). Line numbers are lines of the plan.`];
+    const out = [`# Outline check: ${docName}`, "", `${log.entries.length} points, for: ${log.reader}`, `${flags.length} flags (${errors} errors). Line numbers are lines of the outline.`];
     return out.concat(groups(flags)).join("\n") + "\n";
   }
   const readings = log.entries.length * runs;
@@ -88,13 +92,13 @@ export function report(flags, log, docName, { plan = null, planOnly = false, run
       `${flags.length} flags (${errors} errors, ${flags.length - errors} warnings)` +
       (round?.fresh != null ? `, ${round.fresh} of them new since the last round` : "") +
       (left.length ? `. ${left.length} more ${left.length === 1 ? "was" : "were"} left earlier and ${left.length === 1 ? "is" : "are"} listed at the end` : "") +
-      (plan ? `. Checked against a plan of ${plan.points.length} points.` : "."),
+      (plan ? `. Checked against an outline of ${plan.points.length} points.` : "."),
     `Read ${runs === 1 ? "once" : `${runs} times`} on ${log.model}. ` +
       (cached
         ? `This run cost $${paid.toFixed(2)}: ${cached} of ${readings} chunk readings came from the cache. Reading it all from nothing costs $${cost.toFixed(2)}.`
         : `This run cost $${paid.toFixed(2)}; nothing came from the cache.`),
   ];
-  if (lengths) out.push(`Length: ${lengths.lines} lines, ${lengths.words} words` + (plan?.length ? ` (the plan allows ${plan.length.max} ${plan.length.unit}).` : "."));
+  if (lengths) out.push(`Length: ${lengths.lines} lines, ${lengths.words} words` + (plan?.length ? ` (the outline allows ${plan.length.max} ${plan.length.unit}).` : "."));
   if (round) out.push("", standing(round, runs));
   out.push(...groups(flags));
   if (flags.length) out.push("", `To leave a flag as it is: cold-read leave ${docName} <id> "<why>". It will not be raised again.`);

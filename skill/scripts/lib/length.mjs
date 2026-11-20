@@ -54,7 +54,7 @@ export function checkLength(plan, m) {
   if (plan.length && m[plan.length.unit] > plan.length.max) {
     flags.push({
       kind: "long", level: "error", n: 0, line: 0,
-      message: `The text is ${m[plan.length.unit]} ${plan.length.unit}; the plan allows ${plan.length.max}.`,
+      message: `The text is ${m[plan.length.unit]} ${plan.length.unit}; the outline allows ${plan.length.max}.`,
     });
   }
   for (const s of plan.sections ?? []) {
@@ -63,12 +63,12 @@ export function checkLength(plan, m) {
     if (!found) {
       flags.push({
         kind: "long", level: "warn", n: 0, line: 0,
-        message: `The plan allows "${s.name}" ${s.length.max} ${s.length.unit}, but the text has no heading "${s.name}", so its length was not checked.`,
+        message: `The outline allows "${s.name}" ${s.length.max} ${s.length.unit}, but the text has no heading "${s.name}", so its length was not checked.`,
       });
     } else if (found[s.length.unit] > s.length.max) {
       flags.push({
         kind: "long", level: "error", n: 0, line: found.start,
-        message: `"${s.name}" is ${found[s.length.unit]} ${s.length.unit}; the plan allows ${s.length.max}.`,
+        message: `"${s.name}" is ${found[s.length.unit]} ${s.length.unit}; the outline allows ${s.length.max}.`,
       });
     }
   }
@@ -82,7 +82,7 @@ export function checkPlanLength(plan) {
   if (!plan.length && set.length === 0) {
     flags.push({
       kind: "long", level: "warn", n: 0, line: 0,
-      message: "The plan sets no length, so nothing will hold the text to one. Add a \"Length:\" line under the reader, and under any section that must stay short.",
+      message: "The outline sets no length, so nothing will hold the text to one. Add a \"Length:\" line under the reader, and under any section that must stay short.",
     });
     return flags;
   }

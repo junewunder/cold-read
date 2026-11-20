@@ -24,8 +24,8 @@ for whoever changes it.
     stage: `chunk` (markdown to chunks), `label` (the blind reader, its cache,
     and the screen that drops what it was told to leave out), `log` (folding
     events into the log), `settle` (the whole-log pass that closes threads),
-    `check` (the flags), `plan` (the plan format, its own check, and its
-    diff), `length` (counting the text against the lengths a plan sets),
+    `check` (the flags), `plan` (the outline, which the code still calls a plan: its
+    format, its own check, and its diff against a text), `length` (counting the text against the lengths a plan sets),
     `style` (the style pass: empties what is not the author's prose, runs
     Vale, turns its output into flags), `left` (rounds: flags left with a reason, which flags are new, when a
     round is quiet), `render` (outline and report).

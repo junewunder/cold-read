@@ -42,7 +42,14 @@ export function applyEvents(log, c, events) {
     } else {
       known.uses.push(c.n);
     }
-    entry.concepts.push({ id: k.id, surface, event: k.event, gloss: k.gloss.trim() });
+    const rec = { id: k.id, surface, event: k.event, gloss: k.gloss.trim() };
+    // How the chunk explains the term. Only an explanation has a manner.
+    if (k.event === "defines") {
+      rec.how = k.how || "";
+      rec.example = k.example === true;
+      rec.on = (k.builds_on ?? []).map((t) => t.trim()).filter(Boolean);
+    }
+    entry.concepts.push(rec);
   }
 
   for (const o of events.opens ?? []) {
