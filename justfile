@@ -18,6 +18,10 @@ check doc *args:
 outline doc *args:
     node skill/scripts/cold-read.mjs outline {{doc}} {{args}}
 
+# Flag sentence-level habits with Vale. No model calls.
+style doc *args:
+    node skill/scripts/cold-read.mjs style {{doc}} {{args}}
+
 # Link the skill into ~/.claude/skills so Claude Code can use it.
 install:
     mkdir -p ~/.claude/skills

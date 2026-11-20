@@ -6,6 +6,7 @@
 //   cold-read leave <doc.md> <flag id> "<why>"
 //   cold-read outline <doc.md> [--reader "..."]
 //   cold-read plan <plan.md>
+//   cold-read style <doc.md>
 //
 // check   builds the log, runs the checks, prints the report. Each run on an
 //         edited text is a round. Exit 0 when the round is quiet: no flag that
@@ -15,6 +16,9 @@
 // outline builds the log and prints it as an outline in the plan format.
 // plan    checks a plan on its own, before any text exists. No model calls.
 //         Exit 1 if any flag is an error.
+// style   flags sentence-level habits a pattern can find: figures of speech
+//         standing in for plain verbs, staged points, dashes as connectors.
+//         Needs Vale on the PATH. No model calls. Exit 1 if there is a flag.
 //
 // Options:
 //   --reader <text>       who is reading and what they have never seen
@@ -44,13 +48,14 @@ import { measure, checkLength } from "./lib/length.mjs";
 import { assignIds, loadLeft, splitLeft, leave, recordRound } from "./lib/left.mjs";
 import { settlePrompt, applySettled, SETTLE_SCHEMA } from "./lib/settle.mjs";
 import { outline, report } from "./lib/render.mjs";
+import { lint, styleReport, StyleError } from "./lib/style.mjs";
 
 const DEFAULT_READER =
   "A capable developer who has never seen this project and knows nothing about how it works inside. They know common tools: git, a shell, a package manager.";
 
 function usage(msg) {
   if (msg) console.error(`cold-read: ${msg}\n`);
-  console.error(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 33).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
+  console.error(readFileSync(new URL(import.meta.url), "utf8").split("\n").slice(1, 37).map((l) => l.replace(/^\/\/ ?/, "")).join("\n"));
   process.exit(2);
 }
 
@@ -80,8 +85,21 @@ const { values: opt, positionals } = parseArgs({
 
 const [command, docArg, ...restArgs] = positionals;
 if (opt.help || !command) usage();
-if (!["check", "leave", "outline", "plan"].includes(command)) usage(`unknown command "${command}"`);
+if (!["check", "leave", "outline", "plan", "style"].includes(command)) usage(`unknown command "${command}"`);
 if (!docArg) usage("which document?");
+
+if (command === "style") {
+  let flags;
+  try {
+    flags = lint(readFileSync(resolve(docArg), "utf8"));
+  } catch (e) {
+    if (!(e instanceof StyleError)) throw e;
+    console.error(`cold-read: ${e.message}`);
+    process.exit(2);
+  }
+  process.stdout.write(opt.json ? JSON.stringify({ flags }, null, 2) + "\n" : styleReport(flags, docArg));
+  process.exit(flags.length ? 1 : 0);
+}
 
 if (command === "plan") {
   const p = parsePlan(readFileSync(resolve(docArg), "utf8"));

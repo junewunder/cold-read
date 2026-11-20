@@ -17,6 +17,7 @@ node <skill-dir>/scripts/cold-read.mjs check <doc.md> --reader "<who>" --knows "
 node <skill-dir>/scripts/cold-read.mjs leave <doc.md> <flag id> "<why>"
 node <skill-dir>/scripts/cold-read.mjs outline <doc.md> --reader "<who>" --knows "<a, b, c>"
 node <skill-dir>/scripts/cold-read.mjs plan <plan.md>
+node <skill-dir>/scripts/cold-read.mjs style <doc.md>
 ```
 
 `<skill-dir>` is the folder this file is in. The reader's labels vary from one
@@ -47,6 +48,15 @@ document, whether this reader knows it.
 Then take the branch that fits.
 
 ## 2A. The text exists: check it
+
+**Run `style` first.** It is free and takes a second: Vale matches the text
+against patterns for sentence-level habits (a figure of speech where a plain
+verb would do, a point staged before it is stated, a dash joining two
+clauses) and prints each as `line:col "matched words" what to do [rule]`.
+Rewrite each flagged sentence so it says the plain thing; when the flagged
+words are literal ("the family lives in Leeds"), leave them. Done when `style`
+exits 0 or every flag still standing is a literal use. If it reports that
+Vale is missing, tell june and go on to `check`.
 
 Each `check` on an edited text is a **round**. Run one, then sort every flag by
 reading the lines it points at:
@@ -192,3 +202,5 @@ given and lets it pass. To catch more, add readings (`--runs 3`), and leave
 A flag is a place to look and never a verdict. Whether a claim is true and how
 the text sounds are outside what a cold read sees: run the commands behind
 every number yourself, and use reviewers and the `humanizer` skill for tone.
+`style` finds only the habits a pattern can match, so a text it passes can
+still need the `humanizer`.

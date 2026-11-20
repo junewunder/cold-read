@@ -13,6 +13,7 @@ for whoever changes it.
 - `just eval`: runs the CLI on `eval/wfactory/` and scores it against
   problems found by hand. About 3 minutes and 10 cents on Haiku.
 - `just check <doc>`: cold-read any document.
+- `just style <doc>`: the style pass. Needs `vale` on the PATH; no model.
 
 ## Layout
 
@@ -25,8 +26,13 @@ for whoever changes it.
     events into the log), `settle` (the whole-log pass that closes threads),
     `check` (the flags), `plan` (the plan format, its own check, and its
     diff), `length` (counting the text against the lengths a plan sets),
-    `left` (rounds: flags left with a reason, which flags are new, when a
+    `style` (the style pass: empties what is not the author's prose, runs
+    Vale, turns its output into flags), `left` (rounds: flags left with a reason, which flags are new, when a
     round is quiet), `render` (outline and report).
+  - `style/.vale.ini`: every rule the style pass runs, one line each.
+    `style/styles/cold-read/` holds our own rules. The rest come from
+    `tbhb/vale-ai-tells` (MIT), which `vale sync` fetches at the version the
+    file pins; that copy is gitignored.
 - `test/`: `node --test`, no dependencies.
 - `eval/<case>/`: a document as it was before someone fixed it by hand, and
   `expected.json` listing what they fixed.
@@ -49,5 +55,12 @@ for whoever changes it.
 - **Measure a prompt change.** Run `just eval` before and after and put both
   score lines in the commit message. Labels vary between readings, so one
   known problem flipping is noise.
-- No runtime dependencies. Node's standard library only.
+- No runtime dependencies. Node's standard library only. `claude` and `vale`
+  are outside programs the CLI runs, and only `style` needs `vale`.
+- **A style rule is kept on evidence.** Before adding a line to `.vale.ini`,
+  run the rule over a few hundred real documents, read a random sample of at
+  least eight hits, and keep it only if half or more are sentences worth
+  rewriting. A rule that reads markdown structure or a literal word as the
+  habit gets fixed in `styles/cold-read/` or left out. The style pass stays
+  model-free: a habit that needs judgment belongs in the log.
 - This repo is public. Eval cases come from documents that are already public.

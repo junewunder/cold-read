@@ -1,0 +1,15 @@
+---
+# A dash joining two parts of a sentence. Only running prose is checked:
+# an empty table cell, a heading separator, a range of numbers or dates
+# ("pages 4–9") and a source set off after a finished sentence ("... in 2018.
+# — the project's issue 825") are other uses of the same character.
+extends: existence
+message: "Dash as a connector. Use a comma, a colon, a full stop or parentheses."
+level: warning
+nonword: true
+scope:
+  - paragraph
+  - list
+tokens:
+  - '(?<![\d\s.])\s?—\s?(?!\d)'
+  - '\S\s–\s\S'

@@ -41,7 +41,7 @@ one more, both described below, and nobody but me has tried it.
 It's a [Claude Code](https://docs.claude.com/en/docs/claude-code) skill with a
 small CLI under it. It needs node 20 or newer and the `claude` command, signed
 in. It has no other dependencies and uses no API key: every model call is a
-`claude -p` run on your plan.
+`claude -p` run on your plan. The optional style pass also needs `vale`.
 
 ```sh
 git clone https://github.com/junewunder/cold-read
@@ -91,6 +91,33 @@ two small things the round before didn't.
 | open | a promise or a question that no later part settles |
 | stumble | words the reader can't resolve, such as a loose "this" |
 | contrast | wording set against something the reader was never given |
+
+## The style pass
+
+```sh
+node skill/scripts/cold-read.mjs style notes.md
+```
+
+A cold read finds what the reader was never told. `style` finds a smaller,
+cheaper kind of problem: habits of agent prose that a pattern can match. It
+calls no model and takes about a second. It needs [Vale](https://vale.sh), a
+prose linter that ships as one binary.
+
+```
+notes.md: 2 style flags
+
+  1:1  "The token lives in"  AI overused verb: 'The token lives in'. Say where the item is defined or stored. Disable this rule for biography or housing prose.  [FigurativeLives]
+  1:32  " — "  Dash as a connector. Use a comma, a colon, a full stop or parentheses.  [Dash]
+```
+
+It runs 23 rules. One is this repo's own. The other 22 are picked from
+[tbhb/vale-ai-tells](https://github.com/tbhb/vale-ai-tells), a package of 155
+rules for the tells of AI writing, which Vale downloads on the first run. I
+ran the whole package over 2.2 million words of agent-written markdown and had
+models judge a random sample of each rule's hits. About one hit in ten was a
+sentence worth rewriting, so `style` keeps only the rules where at least half
+were. Passive voice, semicolons and colons are among the rules left out: in
+technical writing they were nearly always fine.
 
 ## Planning a document
 
