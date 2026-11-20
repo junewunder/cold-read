@@ -113,8 +113,8 @@ notes.md: 2 style flags
 It runs 23 rules. One is this repo's own. The other 22 are picked from
 [tbhb/vale-ai-tells](https://github.com/tbhb/vale-ai-tells), a package of 155
 rules for the tells of AI writing, which Vale downloads on the first run. I
-ran the whole package over 2.2 million words of agent-written markdown and had
-models judge a random sample of each rule's hits. About one hit in ten was a
+ran the whole package over my own agent-written markdown and had models judge
+a random sample of each rule's hits. About one hit in ten was a
 sentence worth rewriting, so `style` keeps only the rules where at least half
 were. Passive voice, semicolons and colons are among the rules left out: in
 technical writing they were nearly always fine.
